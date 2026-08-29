@@ -2,6 +2,7 @@ import 'package:clock/clock.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:medipulse/core/constants/app_constants.dart';
 import 'package:medipulse/core/errors/app_failure.dart';
+import 'package:medipulse/features/adherence/domain/refill_calculator.dart';
 import 'package:medipulse/features/medications/domain/scheduling_engine.dart';
 import 'package:medipulse/features/reminders/domain/dose_lifecycle.dart';
 import 'package:medipulse/shared/models/entities.dart';
@@ -14,6 +15,7 @@ class MedicationCoordinator {
     required NotificationService notifications,
     required SubscriptionService subscriptions,
     required AnalyticsService analytics,
+    RefillCalculator? refillCalculator,
     SchedulingEngine? engine,
     DoseLifecycle? lifecycle,
   }) : _medications = medications,
@@ -21,6 +23,7 @@ class MedicationCoordinator {
        _notifications = notifications,
        _subscriptions = subscriptions,
        _analytics = analytics,
+       _refill = refillCalculator ?? RefillCalculator(),
        _engine = engine ?? SchedulingEngine(),
        _lifecycle = lifecycle ?? DoseLifecycle();
 
@@ -29,6 +32,7 @@ class MedicationCoordinator {
   final NotificationService _notifications;
   final SubscriptionService _subscriptions;
   final AnalyticsService _analytics;
+  final RefillCalculator _refill;
   final SchedulingEngine _engine;
   final DoseLifecycle _lifecycle;
 
@@ -109,6 +113,9 @@ class MedicationCoordinator {
     }
     await _doses.save(updated);
     await _notifications.cancelDose(dose.id);
+    if (updated.status == DoseStatus.taken) {
+      await _consumeSupply(dose.medicationId);
+    }
     if (updated.status == DoseStatus.snoozed) {
       final med = await _medications.getById(dose.medicationId);
       if (med != null) {
@@ -116,6 +123,24 @@ class MedicationCoordinator {
       }
     }
     return updated;
+  }
+
+  Future<void> _consumeSupply(String medicationId) async {
+    final med = await _medications.getById(medicationId);
+    if (med == null || med.quantity == null) return;
+    final next = (med.quantity! - med.doseAmount).clamp(0, 1000000).toDouble();
+    final updated = med.copyWith(quantity: next);
+    await _medications.save(updated);
+    if (_refill.estimate(updated).warning) {
+      await _notifications.showImmediate(
+        title: 'Supply may run out soon',
+        body: 'Your medication may run out soon. This estimate is not medical advice.',
+      );
+    }
+  }
+
+  Future<void> updateSupply(Medication medication, double quantity) {
+    return saveMedication(medication.copyWith(quantity: quantity));
   }
 
   tz.Location _location(String name) {

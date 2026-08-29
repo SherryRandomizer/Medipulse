@@ -71,6 +71,9 @@ void main() {
     expect(ok.warning, isFalse);
     final warn = calc.estimate(_med(quantity: 4, threshold: 4));
     expect(warn.warning, isTrue);
+    final afterDose = _med(quantity: 3, threshold: 4);
+    expect(RefillCalculator().estimate(afterDose).remainingDoses, 3);
+    expect(RefillCalculator().estimate(afterDose).warning, isTrue);
   });
 
   test('overdue pending doses become missed after grace', () {

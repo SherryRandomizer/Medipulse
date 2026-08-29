@@ -123,6 +123,11 @@ class MedicationDetailScreen extends ConsumerWidget {
               AppButton(label: 'Edit', onPressed: () => context.push('/medications/${med.id}/edit')),
               const SizedBox(height: 8),
               OutlinedButton(
+                onPressed: () => context.push('/medications/${med.id}/refill'),
+                child: const Text('Update supply'),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton(
                 onPressed: () => _setStatus(context, ref, med, med.isPaused ? MedicationStatus.active : MedicationStatus.paused),
                 child: Text(med.isPaused ? 'Resume' : 'Pause'),
               ),

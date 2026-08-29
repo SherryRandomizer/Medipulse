@@ -10,6 +10,9 @@ import 'package:medipulse/features/medications/data/sqlite_repositories.dart';
 import 'package:medipulse/features/medications/domain/medication_coordinator.dart';
 import 'package:medipulse/features/medications/domain/scheduling_engine.dart';
 import 'package:medipulse/shared/models/entities.dart';
+import 'package:medipulse/features/scanner/data/heuristic_ai_service.dart';
+import 'package:medipulse/features/scanner/data/mlkit_ocr_service.dart';
+import 'package:medipulse/features/scanner/domain/scanner_pipeline.dart';
 import 'package:medipulse/shared/services/phase1_adapters.dart';
 import 'package:medipulse/shared/services/service_interfaces.dart';
 
@@ -37,9 +40,16 @@ final subscriptionServiceProvider = Provider<SubscriptionService>((_) => LocalSu
 
 final adServiceProvider = Provider<AdService>((_) => NoOpAdService());
 
-final aiServiceProvider = Provider<AIService>((_) => UnconfiguredAIService());
+final aiServiceProvider = Provider<AIService>((_) => HeuristicAiService());
 
-final ocrServiceProvider = Provider<OCRService>((_) => UnconfiguredOCRService());
+final ocrServiceProvider = Provider<OCRService>((_) => MlKitOcrService());
+
+final scannerPipelineProvider = Provider<ScannerPipeline>((ref) {
+  return ScannerPipeline(
+    ocr: ref.watch(ocrServiceProvider),
+    analytics: ref.watch(analyticsServiceProvider),
+  );
+});
 
 final medicationRepositoryProvider = Provider<MedicationRepository>(
   (ref) => SqliteMedicationRepository(ref.watch(localDatabaseProvider)),
@@ -62,6 +72,7 @@ final medicationCoordinatorProvider = Provider<MedicationCoordinator>((ref) {
     notifications: ref.watch(notificationServiceProvider),
     subscriptions: ref.watch(subscriptionServiceProvider),
     analytics: ref.watch(analyticsServiceProvider),
+    refillCalculator: ref.watch(refillCalculatorProvider),
     engine: ref.watch(schedulingEngineProvider),
   );
 });

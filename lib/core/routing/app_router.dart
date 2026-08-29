@@ -8,11 +8,15 @@ import 'package:medipulse/features/dashboard/presentation/app_shell.dart';
 import 'package:medipulse/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:medipulse/features/medications/presentation/add_medication_screen.dart';
 import 'package:medipulse/features/medications/presentation/medications_screen.dart';
+import 'package:medipulse/features/medications/presentation/refill_screen.dart';
 import 'package:medipulse/features/onboarding/presentation/notification_permission_screen.dart';
 import 'package:medipulse/features/onboarding/presentation/onboarding_screen.dart';
 import 'package:medipulse/features/onboarding/presentation/splash_screen.dart';
 import 'package:medipulse/features/profile/presentation/profile_screen.dart';
 import 'package:medipulse/features/reports/presentation/reports_screen.dart';
+import 'package:medipulse/features/scanner/domain/extraction_models.dart';
+import 'package:medipulse/features/scanner/domain/scanner_pipeline.dart';
+import 'package:medipulse/features/scanner/presentation/scan_screens.dart';
 import 'package:medipulse/features/settings/presentation/settings_screen.dart';
 
 final _rootKey = GlobalKey<NavigatorState>();
@@ -32,7 +36,25 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/medications/add',
-        builder: (context, state) => const AddMedicationScreen(),
+        builder: (context, state) => AddMedicationScreen(
+          scanOutcome: state.extra is ScanOutcome ? state.extra as ScanOutcome : null,
+        ),
+      ),
+      GoRoute(
+        path: '/scan/prescription',
+        builder: (context, state) => const ScanCaptureScreen(kind: ScanKind.prescription),
+      ),
+      GoRoute(
+        path: '/scan/package',
+        builder: (context, state) => const ScanCaptureScreen(kind: ScanKind.package),
+      ),
+      GoRoute(
+        path: '/scan/review',
+        builder: (context, state) => ScanReviewScreen(outcome: state.extra! as ScanOutcome),
+      ),
+      GoRoute(
+        path: '/medications/:id/refill',
+        builder: (context, state) => RefillScreen(medicationId: state.pathParameters['id']!),
       ),
       GoRoute(
         path: '/medications/:id/edit',

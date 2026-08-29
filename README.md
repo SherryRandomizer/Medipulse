@@ -18,15 +18,19 @@ Implemented and covered by unit/widget tests:
 - Today dashboard, calendar, basic adherence, search, settings
 - Privacy-conscious analytics stubs, subscription/ad/AI/OCR interfaces
 - Firestore security rules (not deployed until Firebase is configured)
+- On-device OCR + heuristic extraction with mandatory review before save
+- Package scan (never treated as medically certain)
+- PDF adherence reports with share/export
+- Refill quantity tracking that decreases when a dose is taken
 
 Not implemented yet (later phases, not claimed complete):
 
 - Firebase Auth / Firestore sync / FCM / Crashlytics
 - Google and Apple sign-in (UI present; requires credentials)
-- Prescription/package OCR + AI extraction
+- Cloud AI providers (local heuristic extraction is the default)
 - MediPulse AI assistant
 - Family/caregiver sharing
-- PDF reports, RevenueCat billing, ads
+- RevenueCat billing, ads
 - Custom branded store icons
 
 ## Run

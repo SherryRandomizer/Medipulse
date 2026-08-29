@@ -7,12 +7,15 @@ import 'package:medipulse/core/constants/legal_copy.dart';
 import 'package:medipulse/core/di/app_controllers.dart';
 import 'package:medipulse/core/di/providers.dart';
 import 'package:medipulse/core/errors/app_failure.dart';
+import 'package:medipulse/features/scanner/domain/scanner_pipeline.dart';
+import 'package:medipulse/features/scanner/domain/heuristic_extractor.dart';
 import 'package:medipulse/shared/models/entities.dart';
 import 'package:medipulse/shared/widgets/app_components.dart';
 
 class AddMedicationScreen extends ConsumerStatefulWidget {
-  const AddMedicationScreen({super.key, this.existingId});
+  const AddMedicationScreen({super.key, this.existingId, this.scanOutcome});
   final String? existingId;
+  final ScanOutcome? scanOutcome;
 
   @override
   ConsumerState<AddMedicationScreen> createState() => _AddMedicationScreenState();
@@ -48,6 +51,7 @@ class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
   void initState() {
     super.initState();
     _loadExisting();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _applyScan());
   }
 
   Future<void> _loadExisting() async {
@@ -83,6 +87,76 @@ class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
       _start = med.startDate;
       _end = med.endDate;
     });
+  }
+
+  void _applyScan() {
+    final scan = widget.scanOutcome;
+    if (scan == null) return;
+    final extractor = HeuristicExtractor();
+    final rx = scan.prescription;
+    final pack = scan.package;
+    setState(() {
+      _method = 'manual';
+      _step = 1;
+      if (rx != null) {
+        if (rx.medicineName.value != null) _name.text = rx.medicineName.value!;
+        if (rx.strength.value != null) _strength.text = rx.strength.value!;
+        if (rx.foodInstruction.value != null) _food.text = rx.foodInstruction.value!;
+        if (rx.additionalInstructions.value != null) _extra.text = rx.additionalInstructions.value!;
+        final dose = rx.dose.value;
+        if (dose != null) {
+          final amount = RegExp(r'(\d+(?:\.\d+)?)').firstMatch(dose);
+          if (amount != null) _dose.text = amount.group(1)!;
+          final unit = RegExp(r'(tablet|capsule|ml|puff|drop)s?').firstMatch(dose.toLowerCase());
+          if (unit != null) _unit.text = unit.group(1)!;
+        }
+        final freq = extractor.frequencyType(rx.frequency.value);
+        if (freq != null) _frequency = freq;
+        final parsedTimes = _parseTimes(rx.times.value);
+        if (parsedTimes.isNotEmpty) _times = parsedTimes;
+        final duration = int.tryParse(RegExp(r'\d+').firstMatch(rx.durationDays.value ?? '')?.group(0) ?? '');
+        if (duration != null) {
+          _end = DateTime(_start.year, _start.month, _start.day).add(Duration(days: duration));
+        }
+      }
+      if (pack != null) {
+        if (pack.medicineName.value != null) _name.text = pack.medicineName.value!;
+        if (pack.strength.value != null) _strength.text = pack.strength.value!;
+        final formLabel = pack.form.value?.toLowerCase();
+        if (formLabel != null) {
+          for (final form in MedicationForm.values) {
+            if (form.label.toLowerCase() == formLabel || form.name == formLabel) {
+              _form = form;
+            }
+          }
+        }
+        final extras = [
+          if (pack.manufacturer.value != null) 'Manufacturer: ${pack.manufacturer.value}',
+          if (pack.expiryDate.value != null) 'Expiry on package: ${pack.expiryDate.value}',
+          if (pack.batchNumber.value != null) 'Batch: ${pack.batchNumber.value}',
+        ];
+        if (extras.isNotEmpty) {
+          _notes.text = extras.join('\n');
+        }
+      }
+    });
+  }
+
+  List<TimeOfDay> _parseTimes(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return const [];
+    final result = <TimeOfDay>[];
+    for (final part in raw.split(',')) {
+      final cleaned = part.trim().toLowerCase().replaceAll('.', ':');
+      final match = RegExp(r'^(\d{1,2}):(\d{2})\s*(am|pm)?$').firstMatch(cleaned);
+      if (match == null) continue;
+      var hour = int.parse(match.group(1)!);
+      final minute = int.parse(match.group(2)!);
+      final period = match.group(3);
+      if (period == 'pm' && hour < 12) hour += 12;
+      if (period == 'am' && hour == 12) hour = 0;
+      result.add(TimeOfDay(hour: hour, minute: minute));
+    }
+    return result;
   }
 
   @override
@@ -213,7 +287,14 @@ class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
                       onPressed: _busy
                           ? null
                           : () {
-                              if (_step == 0 && _method != 'manual') return;
+                              if (_step == 0 && _method == 'prescription') {
+                                context.push('/scan/prescription');
+                                return;
+                              }
+                              if (_step == 0 && _method == 'package') {
+                                context.push('/scan/package');
+                                return;
+                              }
                               if (_step == 4) {
                                 _save();
                               } else {
@@ -238,8 +319,8 @@ class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
         Text('How do you want to add this medicine?', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 16),
         _choice('manual', 'Enter manually', 'Fastest. Type the name, dose, and times.'),
-        _choice('prescription', 'Scan prescription', 'Coming in a later release. AI never saves without your review.'),
-        _choice('package', 'Scan medicine / package', 'Coming in a later release. Image identification is never medically certain.'),
+        _choice('prescription', 'Scan prescription', 'You must confirm every field. Nothing is saved automatically.'),
+        _choice('package', 'Scan medicine / package', 'Identification from a photo is never medically certain.'),
         const SizedBox(height: 12),
         Text(LegalCopy.aiSafety, style: Theme.of(context).textTheme.bodyMedium),
       ],
@@ -250,9 +331,7 @@ class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
     final selected = _method == value;
     return Card(
       child: ListTile(
-        enabled: value == 'manual',
-        selected: selected,
-        onTap: value == 'manual' ? () => setState(() => _method = value) : null,
+        onTap: () => setState(() => _method = value),
         leading: Icon(selected ? Icons.radio_button_checked : Icons.radio_button_off),
         title: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
         subtitle: Text(subtitle),
