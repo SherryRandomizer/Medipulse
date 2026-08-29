@@ -20,6 +20,8 @@ Implemented and covered by unit/widget tests:
 - English, Spanish, Urdu, and Arabic UI for navigation, settings, catalog, health, and family
 - Licensed medicine catalog **interface** (empty unless `API_BASE_URL` and `MEDICAL_DATA_API_KEY` are set)
 - Health / wearable **opt-in journal** of dose-taken times (no invented vitals; native Health Connect / HealthKit SDKs are not linked)
+- Branded launcher and splash mark, iOS privacy manifest, and Play/App Store listing placeholders
+- Profile name, optional photo and date of birth, and time zone; medication search includes archived records
 
 Not implemented yet (not claimed complete):
 
@@ -29,7 +31,7 @@ Not implemented yet (not claimed complete):
 - RevenueCat / store billing and a production ads SDK
 - A licensed drug database or interaction feed (requires a contracted provider)
 - Native Apple Health / Health Connect / wearable SDKs
-- Custom branded store icons
+- Counsel-reviewed Terms, Privacy Policy, and store privacy URLs
 
 ## Run
 

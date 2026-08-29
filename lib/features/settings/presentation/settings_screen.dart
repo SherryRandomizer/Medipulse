@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:medipulse/core/config/app_config.dart';
 import 'package:medipulse/core/constants/legal_copy.dart';
@@ -138,6 +139,24 @@ class EditProfileScreen extends ConsumerStatefulWidget {
 
 class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   final _name = TextEditingController();
+  DateTime? _dob;
+  String? _timeZone;
+  String? _photoPath;
+
+  static const _zones = [
+    'UTC',
+    'America/New_York',
+    'America/Chicago',
+    'America/Denver',
+    'America/Los_Angeles',
+    'Europe/London',
+    'Europe/Berlin',
+    'Asia/Karachi',
+    'Asia/Kolkata',
+    'Asia/Dubai',
+    'Asia/Singapore',
+    'Australia/Sydney',
+  ];
 
   @override
   void dispose() {
@@ -145,36 +164,96 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     super.dispose();
   }
 
+  List<String> _zoneOptions(String? current) {
+    final extra = current == null || current.isEmpty || _zones.contains(current) ? <String>[] : [current];
+    return [...extra, ..._zones];
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(sessionControllerProvider).valueOrNull;
     if (user != null && _name.text.isEmpty) {
       _name.text = user.displayName;
+      _dob ??= user.dateOfBirth;
+      _timeZone ??= user.timeZone;
+      _photoPath ??= user.photoPath;
     }
+    final zones = _zoneOptions(_timeZone ?? user?.timeZone);
     return Scaffold(
       appBar: AppBar(title: const Text('Profile')),
-      body: Padding(
+      body: ListView(
         padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            AppTextField(label: 'Name', controller: _name),
-            const SizedBox(height: 12),
-            Text('Date of birth, photo, and time zone can be added; we do not collect extra medical history.'),
-            const Spacer(),
-            AppButton(
-              label: 'Save',
-              onPressed: user == null
-                  ? null
-                  : () async {
-                      await ref.read(authServiceProvider).updateProfile(
-                        user.copyWith(displayName: _name.text.trim()),
-                      );
-                      await ref.read(sessionControllerProvider.notifier).refresh();
-                      if (context.mounted) Navigator.pop(context);
-                    },
+        children: [
+          Center(
+            child: CircleAvatar(
+              radius: 40,
+              backgroundImage: _photoPath == null ? null : FileImage(File(_photoPath!)),
+              child: _photoPath == null ? const Icon(Icons.person_outline, size: 40) : null,
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: user == null
+                ? null
+                : () async {
+                    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 70);
+                    if (picked == null) return;
+                    final dir = await getApplicationDocumentsDirectory();
+                    final dest = File('${dir.path}/profile-photo.jpg');
+                    await dest.writeAsBytes(await picked.readAsBytes());
+                    setState(() => _photoPath = dest.path);
+                  },
+            child: const Text('Choose photo (stays on this device)'),
+          ),
+          AppTextField(label: 'Name', controller: _name),
+          const SizedBox(height: 12),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Date of birth (optional)'),
+            subtitle: Text(
+              _dob == null ? 'Not set. Used only to personalize your profile.' : _dob!.toLocal().toString().split(' ').first,
+            ),
+            onTap: user == null
+                ? null
+                : () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: _dob ?? DateTime(1980, 1, 1),
+                      firstDate: DateTime(1900),
+                      lastDate: DateTime.now(),
+                    );
+                    if (picked != null) setState(() => _dob = picked);
+                  },
+          ),
+          Text('Time zone', style: Theme.of(context).textTheme.titleMedium),
+          for (final zone in zones)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(zone),
+              trailing: (_timeZone ?? user?.timeZone) == zone ? const Icon(Icons.check) : null,
+              onTap: () => setState(() => _timeZone = zone),
+            ),
+          const SizedBox(height: 12),
+          const Text('We do not collect extra medical history.'),
+          const SizedBox(height: 24),
+          AppButton(
+            label: 'Save',
+            onPressed: user == null
+                ? null
+                : () async {
+                    await ref.read(authServiceProvider).updateProfile(
+                      user.copyWith(
+                        displayName: _name.text.trim(),
+                        dateOfBirth: _dob,
+                        photoPath: _photoPath,
+                        timeZone: _timeZone ?? user.timeZone,
+                      ),
+                    );
+                    await ref.read(sessionControllerProvider.notifier).refresh();
+                    if (context.mounted) Navigator.pop(context);
+                  },
+          ),
+        ],
       ),
     );
   }

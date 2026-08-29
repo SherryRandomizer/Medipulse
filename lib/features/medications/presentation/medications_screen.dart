@@ -16,6 +16,7 @@ class MedicationsScreen extends ConsumerStatefulWidget {
 
 class _MedicationsScreenState extends ConsumerState<MedicationsScreen> {
   final _query = TextEditingController();
+  bool _includeArchived = false;
 
   @override
   void dispose() {
@@ -23,15 +24,21 @@ class _MedicationsScreenState extends ConsumerState<MedicationsScreen> {
     super.dispose();
   }
 
+  ({String query, bool includeArchived}) get _filter =>
+      (query: _query.text, includeArchived: _includeArchived);
+
   @override
   Widget build(BuildContext context) {
-    final meds = ref.watch(medicationsListProvider(_query.text));
+    final meds = ref.watch(medicationsListProvider(_filter));
     return Scaffold(
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const AppHeader(title: 'Medications', subtitle: 'Search by name, generic name, or doctor.'),
+            const AppHeader(
+              title: 'Medications',
+              subtitle: 'Search by name, generic name, or doctor. Archived medicines appear when you search or turn on the switch.',
+            ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: AppTextField(
@@ -40,12 +47,17 @@ class _MedicationsScreenState extends ConsumerState<MedicationsScreen> {
                 onChanged: (_) => setState(() {}),
               ),
             ),
+            SwitchListTile(
+              title: const Text('Include archived'),
+              value: _includeArchived,
+              onChanged: (value) => setState(() => _includeArchived = value),
+            ),
             Expanded(
               child: meds.when(
                 loading: () => const LoadingState(),
                 error: (_, _) => ErrorState(
                   message: 'We could not load your medications.',
-                  onRetry: () => ref.invalidate(medicationsListProvider(_query.text)),
+                  onRetry: () => ref.invalidate(medicationsListProvider(_filter)),
                 ),
                 data: (items) {
                   if (items.isEmpty) {
@@ -184,3 +196,4 @@ class MedicationDetailScreen extends ConsumerWidget {
     );
   }
 }
+

@@ -94,10 +94,12 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                   ? null
                   : () => _run(() async {
                       if (_register) {
+                        final tz = await FlutterTimezone.getLocalTimezone();
                         await auth.registerWithEmail(
                           email: _email.text,
                           password: _password.text,
                           displayName: _name.text,
+                          timeZone: tz,
                         );
                       } else {
                         await auth.signInWithEmail(email: _email.text, password: _password.text);

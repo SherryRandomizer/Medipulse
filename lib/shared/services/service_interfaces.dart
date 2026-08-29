@@ -8,6 +8,7 @@ abstract class AuthService {
     required String email,
     required String password,
     required String displayName,
+    String? timeZone,
   });
   Future<UserProfile> continueAsGuest({required String timeZone});
   Future<void> signOut();

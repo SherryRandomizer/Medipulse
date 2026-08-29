@@ -144,7 +144,7 @@ class DashboardScreen extends ConsumerWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 8),
                       child: EmptyState(
                         title: 'No doses scheduled today',
-                        message: 'Add a medication to start receiving reminders.',
+                        message: 'Add your first medication: name, dose, and time. Then save to get a reminder.',
                         actionLabel: 'Add medication',
                         onAction: () => context.push('/medications/add'),
                       ),

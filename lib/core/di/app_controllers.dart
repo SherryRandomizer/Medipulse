@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:medipulse/core/di/providers.dart';
+import 'package:medipulse/features/medications/domain/medication_search.dart';
 import 'package:medipulse/shared/models/entities.dart';
 
 final onboardingCompleteProvider = FutureProvider<bool>((ref) async {
@@ -71,20 +72,16 @@ final homeSnapshotProvider = FutureProvider<HomeSnapshot?>((ref) async {
   );
 });
 
-final medicationsListProvider = FutureProvider.family<List<Medication>, String>((ref, query) async {
+final medicationsListProvider =
+    FutureProvider.family<List<Medication>, ({String query, bool includeArchived})>((ref, filter) async {
   final user = await ref.watch(sessionControllerProvider.future);
   if (user == null) return [];
   final all = await ref.read(medicationRepositoryProvider).list(user.id, includeArchived: true);
-  final q = query.trim().toLowerCase();
-  if (q.isEmpty) {
-    return all.where((m) => m.status != MedicationStatus.archived).toList();
-  }
-  return all.where((m) {
-    return m.name.toLowerCase().contains(q) ||
-        (m.genericName ?? '').toLowerCase().contains(q) ||
-        (m.doctorName ?? '').toLowerCase().contains(q) ||
-        (m.isArchived && 'archived'.contains(q));
-  }).toList();
+  return MedicationSearch.apply(
+    all,
+    query: filter.query,
+    includeArchivedWhenEmpty: filter.includeArchived,
+  );
 });
 
 final calendarDosesProvider = FutureProvider.family<List<TimelineItem>, DateTime>((ref, day) async {

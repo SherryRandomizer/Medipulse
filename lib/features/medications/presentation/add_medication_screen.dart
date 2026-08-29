@@ -229,7 +229,7 @@ class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
       );
       await ref.read(medicationCoordinatorProvider).saveMedication(medication);
       ref.invalidate(homeSnapshotProvider);
-      ref.invalidate(medicationsListProvider(''));
+      ref.invalidate(medicationsListProvider);
       if (mounted) context.go('/home');
     } catch (error) {
       setState(() {

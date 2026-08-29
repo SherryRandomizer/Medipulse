@@ -63,6 +63,7 @@ class LocalAuthService implements AuthService {
     required String email,
     required String password,
     required String displayName,
+    String? timeZone,
   }) async {
     final normalized = email.trim().toLowerCase();
     if (!_looksLikeEmail(normalized)) {
@@ -80,7 +81,7 @@ class LocalAuthService implements AuthService {
       id: _uuid.v4(),
       email: normalized,
       displayName: displayName.trim(),
-      timeZone: 'UTC',
+      timeZone: (timeZone == null || timeZone.trim().isEmpty) ? 'UTC' : timeZone.trim(),
       preferredLanguage: 'en',
       emailVerified: false,
       isGuest: false,
