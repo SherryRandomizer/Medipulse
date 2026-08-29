@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:medipulse/core/config/app_config.dart';
+import 'package:medipulse/core/logging/crash_redaction.dart';
+import 'package:medipulse/core/logging/crash_reporter.dart';
 import 'package:medipulse/core/notifications/local_notification_service.dart';
 import 'package:medipulse/core/storage/local_database.dart';
 import 'package:medipulse/core/storage/secure_storage_service.dart';
@@ -39,6 +41,13 @@ final notificationServiceProvider = Provider<NotificationService>(
 );
 
 final analyticsServiceProvider = Provider<AnalyticsService>((_) => const PrivacyAnalyticsService());
+
+final crashReporterProvider = Provider<PrivacyCrashReporter>((ref) {
+  final dsn = SentryDsn.tryParse(ref.watch(appConfigProvider).sentryDsn);
+  return PrivacyCrashReporter(
+    sink: dsn == null ? const NoOpCrashSink() : SentryStoreSink(dsn: dsn),
+  );
+});
 
 final subscriptionServiceProvider = Provider<SubscriptionService>((ref) {
   return SqliteSubscriptionService(

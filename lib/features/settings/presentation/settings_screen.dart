@@ -473,11 +473,12 @@ class SubscriptionScreen extends ConsumerWidget {
   }
 }
 
-class AboutScreen extends StatelessWidget {
+class AboutScreen extends ConsumerWidget {
   const AboutScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final configured = ref.watch(appConfigProvider).crashReportingConfigured;
     return Scaffold(
       appBar: AppBar(title: const Text('About')),
       body: ListView(
@@ -487,6 +488,12 @@ class AboutScreen extends StatelessWidget {
           const Text('Never Miss Your Medicine.'),
           const SizedBox(height: 16),
           Text(LegalCopy.medicalDisclaimer),
+          const SizedBox(height: 16),
+          Text(
+            configured
+                ? 'Crash reports: on. Only redacted error types and MediPulse stack frames are sent. Medicine names are not included.'
+                : 'Crash reports: off. Set SENTRY_DSN at build time to send redacted crash reports. Medicine names are never sent.',
+          ),
         ],
       ),
     );

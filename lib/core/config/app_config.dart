@@ -11,6 +11,7 @@ class AppConfig {
     required this.googleWebClientId,
     required this.apiBaseUrl,
     required this.medicalDataApiKey,
+    required this.sentryDsn,
   });
 
   factory AppConfig.fromEnvironment() {
@@ -28,6 +29,7 @@ class AppConfig {
       googleWebClientId: const String.fromEnvironment('GOOGLE_WEB_CLIENT_ID', defaultValue: ''),
       apiBaseUrl: const String.fromEnvironment('API_BASE_URL', defaultValue: ''),
       medicalDataApiKey: const String.fromEnvironment('MEDICAL_DATA_API_KEY', defaultValue: ''),
+      sentryDsn: const String.fromEnvironment('SENTRY_DSN', defaultValue: ''),
     );
   }
 
@@ -40,6 +42,7 @@ class AppConfig {
   final String googleWebClientId;
   final String apiBaseUrl;
   final String medicalDataApiKey;
+  final String sentryDsn;
 
   bool get cloudAuthAvailable => firebaseEnabled;
   bool get googleSignInConfigured => googleWebClientId.isNotEmpty && firebaseEnabled;
@@ -47,4 +50,5 @@ class AppConfig {
   bool get aiConfigured => aiProvider != 'none';
   bool get ocrConfigured => ocrProvider != 'none';
   bool get medicalCatalogConfigured => apiBaseUrl.isNotEmpty && medicalDataApiKey.isNotEmpty;
+  bool get crashReportingConfigured => sentryDsn.isNotEmpty;
 }

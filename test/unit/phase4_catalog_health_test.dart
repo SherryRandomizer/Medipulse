@@ -17,6 +17,7 @@ AppConfig _config({String api = '', String key = ''}) {
     googleWebClientId: '',
     apiBaseUrl: api,
     medicalDataApiKey: key,
+    sentryDsn: '',
   );
 }
 

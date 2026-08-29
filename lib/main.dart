@@ -1,12 +1,25 @@
+import 'dart:async';
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:medipulse/app.dart';
 import 'package:medipulse/bootstrap.dart';
+import 'package:medipulse/core/di/providers.dart';
 import 'package:medipulse/core/logging/app_logger.dart';
 
 Future<void> main() async {
   try {
     final container = await bootstrap();
+    final reporter = container.read(crashReporterProvider);
+    FlutterError.onError = (details) {
+      unawaited(reporter.record(details.exception, details.stack ?? StackTrace.current));
+      FlutterError.presentError(details);
+    };
+    PlatformDispatcher.instance.onError = (error, stack) {
+      unawaited(reporter.record(error, stack, fatal: true));
+      return true;
+    };
     runApp(
       UncontrolledProviderScope(
         container: container,

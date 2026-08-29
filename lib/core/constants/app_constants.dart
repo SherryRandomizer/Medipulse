@@ -9,4 +9,5 @@ class AppConstants {
   static const missedGraceMinutes = 30;
   static const freeMedicationLimit = 5;
   static const defaultTimezoneFallback = 'UTC';
+  static const appVersion = '1.0.0+1';
 }

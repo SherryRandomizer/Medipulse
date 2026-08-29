@@ -23,6 +23,7 @@ Implemented and covered by unit/widget tests:
 - Branded launcher and splash mark, iOS privacy manifest, and Play/App Store listing placeholders
 - Profile name, optional photo and date of birth, and time zone; medication search includes archived records
 - Exact-alarm request, iOS reminder actions, and applying Taken/Snooze/Skip if a notification was tapped while the app was closed
+- Optional redacted crash reports via `SENTRY_DSN` (error type and MediPulse frames only; medicine names stripped)
 
 Not implemented yet (not claimed complete):
 
