@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:medipulse/core/config/app_config.dart';
 import 'package:medipulse/core/constants/legal_copy.dart';
 import 'package:medipulse/core/di/app_controllers.dart';
 import 'package:medipulse/core/di/providers.dart';
+import 'package:medipulse/shared/models/entities.dart';
 import 'package:medipulse/shared/widgets/app_components.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -291,18 +293,49 @@ class SubscriptionScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     ref.read(analyticsServiceProvider).logEvent('subscription_screen_viewed');
+    final user = ref.watch(sessionControllerProvider).valueOrNull;
+    final config = ref.watch(appConfigProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Subscription')),
       body: ListView(
         padding: const EdgeInsets.all(20),
-        children: const [
-          Text('Free', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
-          Text('Basic reminders, limited medications, basic history, basic notifications.'),
-          SizedBox(height: 16),
-          Text('Premium', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
-          Text(
-            'Unlimited medications, AI scanning, family profiles, advanced reports, cloud sync, and MediPulse AI. Store billing is abstracted and not hardcoded.',
+        children: [
+          const Text('Free', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+          const Text('Basic reminders, limited medications, basic history, basic notifications.'),
+          const SizedBox(height: 16),
+          const Text('Premium', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+          const Text(
+            'Unlimited medications, scanning, family profiles, PDF reports, cloud sync, caregiver alerts, and MediPulse AI. Status is stored per account — never hardcoded.',
           ),
+          const SizedBox(height: 16),
+          FutureBuilder(
+            future: user == null ? null : ref.read(subscriptionServiceProvider).current(user.id),
+            builder: (context, snapshot) {
+              final tier = snapshot.data?.tier.name ?? 'free';
+              return Text('Current plan on this device: $tier');
+            },
+          ),
+          const SizedBox(height: 16),
+          if (config.environment == AppEnvironment.development && user != null)
+            AppButton(
+              label: 'Device testing only: set Premium',
+              onPressed: () async {
+                await ref.read(subscriptionServiceProvider).applyEntitlement(
+                  Subscription(
+                    userId: user.id,
+                    tier: SubscriptionTier.premium,
+                    productId: 'dev.local',
+                    updatedAt: DateTime.now().toUtc(),
+                  ),
+                );
+                await ref.read(analyticsServiceProvider).logEvent('subscription_started');
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Premium saved on this device for testing. Not a store purchase.')),
+                  );
+                }
+              },
+            ),
         ],
       ),
     );

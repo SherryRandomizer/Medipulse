@@ -40,7 +40,10 @@ Future<ProviderContainer> bootstrap() async {
   await container.read(analyticsServiceProvider).logEvent('app_open');
   final user = await container.read(authServiceProvider).currentUser();
   if (user != null) {
-    await container.read(medicationCoordinatorProvider).markOverdueMissed(user.id);
+    await container.read(medicationCoordinatorProvider).markOverdueMissed(
+      user.id,
+      firstName: user.greetingName,
+    );
     await container.read(medicationCoordinatorProvider).rescheduleNotifications(user.id);
   }
   return container;

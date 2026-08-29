@@ -46,6 +46,7 @@ abstract class SubscriptionService {
   Stream<Subscription> watch(String userId);
   Future<Subscription> current(String userId);
   Future<void> restorePurchases();
+  Future<void> applyEntitlement(Subscription subscription);
 }
 
 abstract class AdService {

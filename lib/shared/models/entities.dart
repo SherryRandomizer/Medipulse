@@ -452,18 +452,64 @@ class Caregiver {
   const Caregiver({
     required this.id,
     required this.ownerUserId,
-    required this.caregiverUserId,
+    required this.displayName,
     required this.relation,
     required this.status,
+    required this.shareAdherence,
+    required this.inviteCode,
+    required this.createdAt,
+    required this.updatedAt,
+    this.caregiverUserId,
+  });
+
+  final String id;
+  final String ownerUserId;
+  final String displayName;
+  final String? caregiverUserId;
+  final CaregiverRelation relation;
+  final CaregiverPermissionStatus status;
+  final bool shareAdherence;
+  final String inviteCode;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  bool get canReceiveAdherenceAlerts =>
+      status == CaregiverPermissionStatus.accepted && shareAdherence;
+
+  Caregiver copyWith({
+    CaregiverPermissionStatus? status,
+    bool? shareAdherence,
+    DateTime? updatedAt,
+  }) {
+    return Caregiver(
+      id: id,
+      ownerUserId: ownerUserId,
+      displayName: displayName,
+      caregiverUserId: caregiverUserId,
+      relation: relation,
+      status: status ?? this.status,
+      shareAdherence: shareAdherence ?? this.shareAdherence,
+      inviteCode: inviteCode,
+      createdAt: createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+}
+
+class FamilyProfile {
+  const FamilyProfile({
+    required this.id,
+    required this.ownerUserId,
+    required this.displayName,
+    required this.relation,
     required this.createdAt,
     required this.updatedAt,
   });
 
   final String id;
   final String ownerUserId;
-  final String caregiverUserId;
+  final String displayName;
   final CaregiverRelation relation;
-  final CaregiverPermissionStatus status;
   final DateTime createdAt;
   final DateTime updatedAt;
 }

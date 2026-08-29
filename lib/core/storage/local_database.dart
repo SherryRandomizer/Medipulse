@@ -18,9 +18,20 @@ class LocalDatabase {
     final path = p.join(dir.path, 'medipulse.db');
     _db = await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: (db, _) async {
-        await db.execute('''
+        await _createV1(db);
+        await _createV2(db);
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) await _createV2(db);
+      },
+    );
+    return _db!;
+  }
+
+  Future<void> _createV1(Database db) async {
+    await db.execute('''
 CREATE TABLE users (
   id TEXT PRIMARY KEY,
   email TEXT UNIQUE,
@@ -40,7 +51,7 @@ CREATE TABLE users (
   deleted_at TEXT
 )
 ''');
-        await db.execute('''
+    await db.execute('''
 CREATE TABLE notification_preferences (
   user_id TEXT PRIMARY KEY,
   enabled INTEGER NOT NULL,
@@ -50,7 +61,7 @@ CREATE TABLE notification_preferences (
   updated_at TEXT NOT NULL
 )
 ''');
-        await db.execute('''
+    await db.execute('''
 CREATE TABLE medications (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
@@ -75,7 +86,7 @@ CREATE TABLE medications (
   deleted_at TEXT
 )
 ''');
-        await db.execute('''
+    await db.execute('''
 CREATE TABLE medication_schedules (
   id TEXT PRIMARY KEY,
   medication_id TEXT NOT NULL UNIQUE,
@@ -88,7 +99,7 @@ CREATE TABLE medication_schedules (
   updated_at TEXT NOT NULL
 )
 ''');
-        await db.execute('''
+    await db.execute('''
 CREATE TABLE medication_doses (
   id TEXT PRIMARY KEY,
   medication_id TEXT NOT NULL,
@@ -104,18 +115,62 @@ CREATE TABLE medication_doses (
   UNIQUE(medication_id, scheduled_at)
 )
 ''');
-        await db.execute(
-          'CREATE INDEX idx_doses_user_time ON medication_doses(user_id, remind_at)',
-        );
-        await db.execute('''
+    await db.execute(
+      'CREATE INDEX idx_doses_user_time ON medication_doses(user_id, remind_at)',
+    );
+    await db.execute('''
 CREATE TABLE app_state (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 )
 ''');
-      },
-    );
-    return _db!;
+  }
+
+  Future<void> _createV2(Database db) async {
+    await db.execute('''
+CREATE TABLE caregivers (
+  id TEXT PRIMARY KEY,
+  owner_user_id TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  caregiver_user_id TEXT,
+  relation TEXT NOT NULL,
+  status TEXT NOT NULL,
+  share_adherence INTEGER NOT NULL,
+  invite_code TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+)
+''');
+    await db.execute('''
+CREATE TABLE family_profiles (
+  id TEXT PRIMARY KEY,
+  owner_user_id TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  relation TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+)
+''');
+    await db.execute('''
+CREATE TABLE subscriptions (
+  user_id TEXT PRIMARY KEY,
+  tier TEXT NOT NULL,
+  product_id TEXT,
+  expires_at TEXT,
+  updated_at TEXT NOT NULL
+)
+''');
+    await db.execute('''
+CREATE TABLE sync_queue (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  operation TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  synced_at TEXT
+)
+''');
   }
 
   Future<void> upsertUser(UserProfile user, {String? passwordHash, String? passwordSalt}) async {
@@ -182,6 +237,10 @@ CREATE TABLE app_state (
       }
       await txn.delete('medications', where: 'user_id = ?', whereArgs: [userId]);
       await txn.delete('notification_preferences', where: 'user_id = ?', whereArgs: [userId]);
+      await txn.delete('caregivers', where: 'owner_user_id = ?', whereArgs: [userId]);
+      await txn.delete('family_profiles', where: 'owner_user_id = ?', whereArgs: [userId]);
+      await txn.delete('subscriptions', where: 'user_id = ?', whereArgs: [userId]);
+      await txn.delete('sync_queue', where: 'user_id = ?', whereArgs: [userId]);
       await txn.delete('users', where: 'id = ?', whereArgs: [userId]);
     });
   }
@@ -519,6 +578,144 @@ CREATE TABLE app_state (
         createdAt: DateTime.parse(s['created_at']! as String),
         updatedAt: DateTime.parse(s['updated_at']! as String),
       ),
+    );
+  }
+
+  Future<void> upsertCaregiver(Caregiver caregiver) async {
+    final db = await database;
+    await db.insert('caregivers', {
+      'id': caregiver.id,
+      'owner_user_id': caregiver.ownerUserId,
+      'display_name': caregiver.displayName,
+      'caregiver_user_id': caregiver.caregiverUserId,
+      'relation': caregiver.relation.name,
+      'status': caregiver.status.name,
+      'share_adherence': caregiver.shareAdherence ? 1 : 0,
+      'invite_code': caregiver.inviteCode,
+      'created_at': caregiver.createdAt.toIso8601String(),
+      'updated_at': caregiver.updatedAt.toIso8601String(),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<List<Caregiver>> caregiversFor(String ownerUserId) async {
+    final db = await database;
+    final rows = await db.query(
+      'caregivers',
+      where: 'owner_user_id = ?',
+      whereArgs: [ownerUserId],
+      orderBy: 'display_name COLLATE NOCASE',
+    );
+    return rows.map(_caregiverFrom).toList();
+  }
+
+  Future<void> deleteCaregiver(String id) async {
+    final db = await database;
+    await db.delete('caregivers', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<void> upsertFamilyProfile(FamilyProfile profile) async {
+    final db = await database;
+    await db.insert('family_profiles', {
+      'id': profile.id,
+      'owner_user_id': profile.ownerUserId,
+      'display_name': profile.displayName,
+      'relation': profile.relation.name,
+      'created_at': profile.createdAt.toIso8601String(),
+      'updated_at': profile.updatedAt.toIso8601String(),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<List<FamilyProfile>> familyProfilesFor(String ownerUserId) async {
+    final db = await database;
+    final rows = await db.query(
+      'family_profiles',
+      where: 'owner_user_id = ?',
+      whereArgs: [ownerUserId],
+      orderBy: 'display_name COLLATE NOCASE',
+    );
+    return [
+      for (final row in rows)
+        FamilyProfile(
+          id: row['id']! as String,
+          ownerUserId: row['owner_user_id']! as String,
+          displayName: row['display_name']! as String,
+          relation: CaregiverRelation.values.byName(row['relation']! as String),
+          createdAt: DateTime.parse(row['created_at']! as String),
+          updatedAt: DateTime.parse(row['updated_at']! as String),
+        ),
+    ];
+  }
+
+  Future<void> deleteFamilyProfile(String id) async {
+    final db = await database;
+    await db.delete('family_profiles', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<void> upsertSubscription(Subscription subscription) async {
+    final db = await database;
+    await db.insert('subscriptions', {
+      'user_id': subscription.userId,
+      'tier': subscription.tier.name,
+      'product_id': subscription.productId,
+      'expires_at': subscription.expiresAt?.toIso8601String(),
+      'updated_at': subscription.updatedAt.toIso8601String(),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<Subscription?> subscriptionFor(String userId) async {
+    final db = await database;
+    final rows = await db.query('subscriptions', where: 'user_id = ?', whereArgs: [userId]);
+    if (rows.isEmpty) return null;
+    final row = rows.first;
+    return Subscription(
+      userId: userId,
+      tier: SubscriptionTier.values.byName(row['tier']! as String),
+      productId: row['product_id'] as String?,
+      expiresAt: row['expires_at'] == null ? null : DateTime.parse(row['expires_at']! as String),
+      updatedAt: DateTime.parse(row['updated_at']! as String),
+    );
+  }
+
+  Future<void> enqueueSync({
+    required String id,
+    required String userId,
+    required String entityType,
+    required String entityId,
+    required String operation,
+  }) async {
+    final db = await database;
+    await db.insert('sync_queue', {
+      'id': id,
+      'user_id': userId,
+      'entity_type': entityType,
+      'entity_id': entityId,
+      'operation': operation,
+      'created_at': DateTime.now().toUtc().toIso8601String(),
+      'synced_at': null,
+    });
+  }
+
+  Future<List<Map<String, Object?>>> pendingSync(String userId) async {
+    final db = await database;
+    return db.query(
+      'sync_queue',
+      where: 'user_id = ? AND synced_at IS NULL',
+      whereArgs: [userId],
+    );
+  }
+
+  Caregiver _caregiverFrom(Map<String, Object?> row) {
+    return Caregiver(
+      id: row['id']! as String,
+      ownerUserId: row['owner_user_id']! as String,
+      displayName: row['display_name']! as String,
+      caregiverUserId: row['caregiver_user_id'] as String?,
+      relation: CaregiverRelation.values.byName(row['relation']! as String),
+      status: CaregiverPermissionStatus.values.byName(row['status']! as String),
+      shareAdherence: row['share_adherence'] == 1,
+      inviteCode: row['invite_code']! as String,
+      createdAt: DateTime.parse(row['created_at']! as String),
+      updatedAt: DateTime.parse(row['updated_at']! as String),
     );
   }
 }

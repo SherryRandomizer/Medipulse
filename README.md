@@ -22,6 +22,10 @@ Implemented and covered by unit/widget tests:
 - Package scan (never treated as medically certain)
 - PDF adherence reports with share/export
 - Refill quantity tracking that decreases when a dose is taken
+- Family profiles and caregiver invite/share switches (Premium)
+- MediPulse AI answers from the saved schedule only
+- Cloud sync queue (uploads when Firebase is enabled)
+- Subscription entitlements stored per account; ads never on dose confirmation
 
 Not implemented yet (later phases, not claimed complete):
 

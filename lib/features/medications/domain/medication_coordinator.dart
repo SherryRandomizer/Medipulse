@@ -3,6 +3,7 @@ import 'package:timezone/timezone.dart' as tz;
 import 'package:medipulse/core/constants/app_constants.dart';
 import 'package:medipulse/core/errors/app_failure.dart';
 import 'package:medipulse/features/adherence/domain/refill_calculator.dart';
+import 'package:medipulse/features/caregivers/domain/caregiver_service.dart';
 import 'package:medipulse/features/medications/domain/scheduling_engine.dart';
 import 'package:medipulse/features/reminders/domain/dose_lifecycle.dart';
 import 'package:medipulse/shared/models/entities.dart';
@@ -15,6 +16,7 @@ class MedicationCoordinator {
     required NotificationService notifications,
     required SubscriptionService subscriptions,
     required AnalyticsService analytics,
+    CaregiverAlertSink? caregiverAlerts,
     RefillCalculator? refillCalculator,
     SchedulingEngine? engine,
     DoseLifecycle? lifecycle,
@@ -23,6 +25,7 @@ class MedicationCoordinator {
        _notifications = notifications,
        _subscriptions = subscriptions,
        _analytics = analytics,
+       _caregiverAlerts = caregiverAlerts,
        _refill = refillCalculator ?? RefillCalculator(),
        _engine = engine ?? SchedulingEngine(),
        _lifecycle = lifecycle ?? DoseLifecycle();
@@ -32,6 +35,7 @@ class MedicationCoordinator {
   final NotificationService _notifications;
   final SubscriptionService _subscriptions;
   final AnalyticsService _analytics;
+  final CaregiverAlertSink? _caregiverAlerts;
   final RefillCalculator _refill;
   final SchedulingEngine _engine;
   final DoseLifecycle _lifecycle;
@@ -85,7 +89,7 @@ class MedicationCoordinator {
     }
   }
 
-  Future<void> markOverdueMissed(String userId) async {
+  Future<void> markOverdueMissed(String userId, {String firstName = 'Someone'}) async {
     final pending = await _doses.pending(userId);
     for (final dose in pending) {
       final updated = _lifecycle.markMissedIfOverdue(dose);
@@ -93,6 +97,11 @@ class MedicationCoordinator {
         await _doses.save(updated);
         await _notifications.cancelDose(dose.id);
         await _analytics.logEvent('medication_missed');
+        await _caregiverAlerts?.onMissedDose(
+          ownerUserId: userId,
+          ownerFirstName: firstName,
+          scheduledAt: updated.scheduledAt,
+        );
       }
     }
   }

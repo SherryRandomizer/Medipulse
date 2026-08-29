@@ -33,7 +33,10 @@ class HomeSnapshot {
 final homeSnapshotProvider = FutureProvider<HomeSnapshot?>((ref) async {
   final user = await ref.watch(sessionControllerProvider.future);
   if (user == null) return null;
-  await ref.read(medicationCoordinatorProvider).markOverdueMissed(user.id);
+  await ref.read(medicationCoordinatorProvider).markOverdueMissed(
+    user.id,
+    firstName: user.greetingName,
+  );
   final medications = await ref.read(medicationRepositoryProvider).list(user.id);
   final now = DateTime.now();
   final start = DateTime(now.year, now.month, now.day).toUtc();

@@ -7,6 +7,7 @@ import 'package:medipulse/core/constants/legal_copy.dart';
 import 'package:medipulse/core/di/app_controllers.dart';
 import 'package:medipulse/core/di/providers.dart';
 import 'package:medipulse/core/errors/app_failure.dart';
+import 'package:medipulse/features/subscriptions/domain/premium_features.dart';
 import 'package:medipulse/features/scanner/domain/scanner_pipeline.dart';
 import 'package:medipulse/features/scanner/domain/heuristic_extractor.dart';
 import 'package:medipulse/shared/models/entities.dart';
@@ -286,13 +287,20 @@ class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
                       label: _step == 4 ? (_busy ? 'Saving…' : 'Save') : 'Next',
                       onPressed: _busy
                           ? null
-                          : () {
-                              if (_step == 0 && _method == 'prescription') {
-                                context.push('/scan/prescription');
-                                return;
-                              }
-                              if (_step == 0 && _method == 'package') {
-                                context.push('/scan/package');
+                          : () async {
+                              if (_step == 0 && (_method == 'prescription' || _method == 'package')) {
+                                final user = await ref.read(sessionControllerProvider.future);
+                                final sub = user == null
+                                    ? null
+                                    : await ref.read(subscriptionServiceProvider).current(user.id);
+                                if (!context.mounted) return;
+                                if (sub == null || !PremiumFeatures.canScan(sub)) {
+                                  context.push('/paywall', extra: 'Scanning');
+                                  return;
+                                }
+                                context.push(
+                                  _method == 'prescription' ? '/scan/prescription' : '/scan/package',
+                                );
                                 return;
                               }
                               if (_step == 4) {

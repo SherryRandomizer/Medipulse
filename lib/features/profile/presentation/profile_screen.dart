@@ -41,6 +41,18 @@ class ProfileScreen extends ConsumerWidget {
                   onTap: () => context.push('/settings'),
                 ),
                 ListTile(
+                  title: const Text('Family & caregivers'),
+                  subtitle: const Text('Premium. Share missed-dose alerts you approve.'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.push('/family'),
+                ),
+                ListTile(
+                  title: const Text('MediPulse AI'),
+                  subtitle: const Text('Ask about your saved schedule only.'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.push('/ai'),
+                ),
+                ListTile(
                   title: const Text('Subscription'),
                   subtitle: const Text('Free plan — billing adapter is ready for RevenueCat.'),
                   trailing: const Icon(Icons.chevron_right),

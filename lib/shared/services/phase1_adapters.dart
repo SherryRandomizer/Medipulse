@@ -17,6 +17,8 @@ class PrivacyAnalyticsService implements AnalyticsService {
     'subscription_screen_viewed',
     'subscription_started',
     'subscription_cancelled',
+    'caregiver_invited',
+    'ai_question_asked',
   };
 
   @override
@@ -53,6 +55,9 @@ class LocalSubscriptionService implements SubscriptionService {
 
   @override
   Future<void> restorePurchases() async {}
+
+  @override
+  Future<void> applyEntitlement(Subscription subscription) async {}
 }
 
 class NoOpAdService implements AdService {

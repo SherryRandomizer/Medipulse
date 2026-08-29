@@ -17,7 +17,10 @@ import 'package:medipulse/features/reports/presentation/reports_screen.dart';
 import 'package:medipulse/features/scanner/domain/extraction_models.dart';
 import 'package:medipulse/features/scanner/domain/scanner_pipeline.dart';
 import 'package:medipulse/features/scanner/presentation/scan_screens.dart';
+import 'package:medipulse/features/ai/presentation/ai_chat_screen.dart';
+import 'package:medipulse/features/caregivers/presentation/family_caregiver_screen.dart';
 import 'package:medipulse/features/settings/presentation/settings_screen.dart';
+import 'package:medipulse/features/subscriptions/presentation/paywall_screen.dart';
 
 final _rootKey = GlobalKey<NavigatorState>();
 
@@ -78,6 +81,14 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: '/settings/language', builder: (context, state) => const LanguageSettingsScreen()),
       GoRoute(path: '/settings/subscription', builder: (context, state) => const SubscriptionScreen()),
+      GoRoute(
+        path: '/paywall',
+        builder: (context, state) => PaywallScreen(
+          featureName: state.extra is String ? state.extra! as String : 'This feature',
+        ),
+      ),
+      GoRoute(path: '/family', builder: (context, state) => const FamilyCaregiverScreen()),
+      GoRoute(path: '/ai', builder: (context, state) => const AiChatScreen()),
       GoRoute(path: '/settings/about', builder: (context, state) => const AboutScreen()),
       GoRoute(
         path: '/legal/terms',

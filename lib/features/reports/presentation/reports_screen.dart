@@ -3,14 +3,16 @@ import 'dart:io';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:medipulse/core/constants/legal_copy.dart';
 import 'package:medipulse/core/di/app_controllers.dart';
 import 'package:medipulse/core/di/providers.dart';
 import 'package:medipulse/core/theme/app_colors.dart';
+import 'package:medipulse/features/ads/presentation/ad_banner.dart';
 import 'package:medipulse/features/reports/domain/report_pdf_builder.dart';
-import 'package:medipulse/shared/models/entities.dart';
+import 'package:medipulse/features/subscriptions/domain/premium_features.dart';
 import 'package:medipulse/shared/widgets/app_components.dart';
 import 'package:medipulse/shared/widgets/medication_widgets.dart';
 
@@ -40,12 +42,16 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     setState(() => _exporting = true);
     try {
       final user = await ref.read(sessionControllerProvider.future);
-      final meds = user == null
-          ? <Medication>[]
-          : await ref.read(medicationRepositoryProvider).list(user.id, includeArchived: true);
+      if (user == null) return;
+      final sub = await ref.read(subscriptionServiceProvider).current(user.id);
+      if (!PremiumFeatures.canExportPdf(sub)) {
+        if (mounted) context.push('/paywall', extra: 'PDF reports');
+        return;
+      }
+      final meds = await ref.read(medicationRepositoryProvider).list(user.id, includeArchived: true);
       final summary = await ref.read(rangeAdherenceProvider(_range).future);
       final bytes = await ReportPdfBuilder().build(
-        patientName: user?.displayName ?? '',
+        patientName: user.displayName,
         from: _from,
         to: _to,
         medications: meds,
@@ -168,6 +174,23 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             ),
             const SizedBox(height: 16),
             Text(LegalCopy.reportDisclaimer, style: Theme.of(context).textTheme.bodyMedium),
+            Consumer(
+              builder: (context, ref, _) {
+                final user = ref.watch(sessionControllerProvider).valueOrNull;
+                if (user == null) return const SizedBox.shrink();
+                return FutureBuilder(
+                  future: ref.read(subscriptionServiceProvider).current(user.id),
+                  builder: (context, snapshot) {
+                    final sub = snapshot.data;
+                    if (sub == null) return const SizedBox.shrink();
+                    return NonIntrusiveAdBanner(
+                      subscription: sub,
+                      ads: ref.read(adServiceProvider),
+                    );
+                  },
+                );
+              },
+            ),
           ],
         ),
       ),

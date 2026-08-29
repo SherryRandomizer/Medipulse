@@ -13,7 +13,9 @@ import 'package:medipulse/shared/models/entities.dart';
 import 'package:medipulse/features/scanner/data/heuristic_ai_service.dart';
 import 'package:medipulse/features/scanner/data/mlkit_ocr_service.dart';
 import 'package:medipulse/features/scanner/domain/scanner_pipeline.dart';
+import 'package:medipulse/features/caregivers/domain/caregiver_service.dart';
 import 'package:medipulse/shared/services/phase1_adapters.dart';
+import 'package:medipulse/shared/services/phase3_adapters.dart';
 import 'package:medipulse/shared/services/service_interfaces.dart';
 
 final appConfigProvider = Provider<AppConfig>((_) => AppConfig.fromEnvironment());
@@ -36,9 +38,30 @@ final notificationServiceProvider = Provider<NotificationService>(
 
 final analyticsServiceProvider = Provider<AnalyticsService>((_) => const PrivacyAnalyticsService());
 
-final subscriptionServiceProvider = Provider<SubscriptionService>((_) => LocalSubscriptionService());
+final subscriptionServiceProvider = Provider<SubscriptionService>((ref) {
+  return SqliteSubscriptionService(
+    database: ref.watch(localDatabaseProvider),
+    config: ref.watch(appConfigProvider),
+  );
+});
 
-final adServiceProvider = Provider<AdService>((_) => NoOpAdService());
+final adServiceProvider = Provider<AdService>(
+  (ref) => ConfigAdService(ref.watch(appConfigProvider)),
+);
+
+final caregiverServiceProvider = Provider<CaregiverAlertSink>((ref) {
+  return CaregiverAlertSink(
+    database: ref.watch(localDatabaseProvider),
+    notifications: ref.watch(notificationServiceProvider),
+  );
+});
+
+final cloudSyncServiceProvider = Provider<LocalCloudSyncService>((ref) {
+  return LocalCloudSyncService(
+    database: ref.watch(localDatabaseProvider),
+    config: ref.watch(appConfigProvider),
+  );
+});
 
 final aiServiceProvider = Provider<AIService>((_) => HeuristicAiService());
 
@@ -72,6 +95,7 @@ final medicationCoordinatorProvider = Provider<MedicationCoordinator>((ref) {
     notifications: ref.watch(notificationServiceProvider),
     subscriptions: ref.watch(subscriptionServiceProvider),
     analytics: ref.watch(analyticsServiceProvider),
+    caregiverAlerts: ref.watch(caregiverServiceProvider),
     refillCalculator: ref.watch(refillCalculatorProvider),
     engine: ref.watch(schedulingEngineProvider),
   );
