@@ -8,6 +8,8 @@ import 'package:medipulse/core/config/app_config.dart';
 import 'package:medipulse/core/constants/legal_copy.dart';
 import 'package:medipulse/core/di/app_controllers.dart';
 import 'package:medipulse/core/di/providers.dart';
+import 'package:medipulse/l10n/app_locales.dart';
+import 'package:medipulse/l10n/app_localizations.dart';
 import 'package:medipulse/shared/models/entities.dart';
 import 'package:medipulse/shared/widgets/app_components.dart';
 
@@ -19,7 +21,7 @@ class SettingsScreen extends ConsumerWidget {
     final user = ref.watch(sessionControllerProvider).valueOrNull;
     final prefs = ref.watch(prefsProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(title: Text(AppLocalizations.of(context).settingsTitle)),
       body: ListView(
         children: [
           const ListTile(title: Text('Account'), dense: true),
@@ -41,8 +43,8 @@ class SettingsScreen extends ConsumerWidget {
             onTap: () => context.push('/settings/accessibility'),
           ),
           ListTile(
-            title: const Text('Language'),
-            subtitle: Text(user?.preferredLanguage ?? 'en'),
+            title: Text(AppLocalizations.of(context).languageTitle),
+            subtitle: Text(AppLocales.labels[user?.preferredLanguage] ?? user?.preferredLanguage ?? 'en'),
             onTap: () => context.push('/settings/language'),
           ),
           const Divider(),
@@ -53,8 +55,13 @@ class SettingsScreen extends ConsumerWidget {
           ),
           ListTile(
             title: const Text('Security'),
-            subtitle: const Text('Session stays on this device. Cloud sync is not enabled in Phase 1.'),
+            subtitle: Text(AppLocalizations.of(context).securitySubtitle),
             onTap: () {},
+          ),
+          ListTile(
+            title: Text(AppLocalizations.of(context).healthTitle),
+            subtitle: const Text('Apple Health, Health Connect, and wearables'),
+            onTap: () => context.push('/settings/health'),
           ),
           ListTile(
             title: const Text('Export data'),
@@ -272,16 +279,33 @@ class AccessibilitySettingsScreen extends ConsumerWidget {
   }
 }
 
-class LanguageSettingsScreen extends StatelessWidget {
+class LanguageSettingsScreen extends ConsumerWidget {
   const LanguageSettingsScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(sessionControllerProvider).valueOrNull;
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Language')),
-      body: const ListTile(
-        title: Text('English'),
-        subtitle: Text('Additional languages are planned for a later phase. The app is localization-ready.'),
+      appBar: AppBar(title: Text(l10n.languageTitle)),
+      body: ListView(
+        children: [
+          for (final code in AppLocales.codes)
+            ListTile(
+              title: Text(AppLocales.labels[code]!),
+              trailing: (user?.preferredLanguage ?? 'en') == code
+                  ? const Icon(Icons.check)
+                  : null,
+              onTap: user == null
+                  ? null
+                  : () async {
+                      await ref.read(authServiceProvider).updateProfile(
+                        user.copyWith(preferredLanguage: code, updatedAt: DateTime.now().toUtc()),
+                      );
+                      await ref.read(sessionControllerProvider.notifier).refresh();
+                    },
+            ),
+        ],
       ),
     );
   }

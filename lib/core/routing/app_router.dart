@@ -18,6 +18,8 @@ import 'package:medipulse/features/scanner/domain/extraction_models.dart';
 import 'package:medipulse/features/scanner/domain/scanner_pipeline.dart';
 import 'package:medipulse/features/scanner/presentation/scan_screens.dart';
 import 'package:medipulse/features/ai/presentation/ai_chat_screen.dart';
+import 'package:medipulse/features/catalog/presentation/catalog_search_screen.dart';
+import 'package:medipulse/features/health/presentation/health_settings_screen.dart';
 import 'package:medipulse/features/caregivers/presentation/family_caregiver_screen.dart';
 import 'package:medipulse/features/settings/presentation/settings_screen.dart';
 import 'package:medipulse/features/subscriptions/presentation/paywall_screen.dart';
@@ -80,6 +82,8 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const AccessibilitySettingsScreen(),
       ),
       GoRoute(path: '/settings/language', builder: (context, state) => const LanguageSettingsScreen()),
+      GoRoute(path: '/settings/health', builder: (context, state) => const HealthSettingsScreen()),
+      GoRoute(path: '/catalog', builder: (context, state) => const CatalogSearchScreen()),
       GoRoute(path: '/settings/subscription', builder: (context, state) => const SubscriptionScreen()),
       GoRoute(
         path: '/paywall',

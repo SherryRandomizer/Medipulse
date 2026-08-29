@@ -4,6 +4,7 @@ import 'package:medipulse/core/constants/app_constants.dart';
 import 'package:medipulse/core/errors/app_failure.dart';
 import 'package:medipulse/features/adherence/domain/refill_calculator.dart';
 import 'package:medipulse/features/caregivers/domain/caregiver_service.dart';
+import 'package:medipulse/features/health/domain/health_sync.dart';
 import 'package:medipulse/features/medications/domain/scheduling_engine.dart';
 import 'package:medipulse/features/reminders/domain/dose_lifecycle.dart';
 import 'package:medipulse/shared/models/entities.dart';
@@ -17,6 +18,7 @@ class MedicationCoordinator {
     required SubscriptionService subscriptions,
     required AnalyticsService analytics,
     CaregiverAlertSink? caregiverAlerts,
+    HealthSyncService? healthSync,
     RefillCalculator? refillCalculator,
     SchedulingEngine? engine,
     DoseLifecycle? lifecycle,
@@ -26,6 +28,7 @@ class MedicationCoordinator {
        _subscriptions = subscriptions,
        _analytics = analytics,
        _caregiverAlerts = caregiverAlerts,
+       _healthSync = healthSync,
        _refill = refillCalculator ?? RefillCalculator(),
        _engine = engine ?? SchedulingEngine(),
        _lifecycle = lifecycle ?? DoseLifecycle();
@@ -36,6 +39,7 @@ class MedicationCoordinator {
   final SubscriptionService _subscriptions;
   final AnalyticsService _analytics;
   final CaregiverAlertSink? _caregiverAlerts;
+  final HealthSyncService? _healthSync;
   final RefillCalculator _refill;
   final SchedulingEngine _engine;
   final DoseLifecycle _lifecycle;
@@ -124,6 +128,7 @@ class MedicationCoordinator {
     await _notifications.cancelDose(dose.id);
     if (updated.status == DoseStatus.taken) {
       await _consumeSupply(dose.medicationId);
+      await _healthSync?.onDoseTaken(userId: dose.userId, takenAt: updated.actedAt ?? clock.now().toUtc());
     }
     if (updated.status == DoseStatus.snoozed) {
       final med = await _medications.getById(dose.medicationId);

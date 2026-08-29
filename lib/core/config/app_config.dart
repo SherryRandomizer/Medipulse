@@ -10,6 +10,7 @@ class AppConfig {
     required this.revenueCatApiKey,
     required this.googleWebClientId,
     required this.apiBaseUrl,
+    required this.medicalDataApiKey,
   });
 
   factory AppConfig.fromEnvironment() {
@@ -26,6 +27,7 @@ class AppConfig {
       revenueCatApiKey: const String.fromEnvironment('REVENUECAT_API_KEY', defaultValue: ''),
       googleWebClientId: const String.fromEnvironment('GOOGLE_WEB_CLIENT_ID', defaultValue: ''),
       apiBaseUrl: const String.fromEnvironment('API_BASE_URL', defaultValue: ''),
+      medicalDataApiKey: const String.fromEnvironment('MEDICAL_DATA_API_KEY', defaultValue: ''),
     );
   }
 
@@ -37,10 +39,12 @@ class AppConfig {
   final String revenueCatApiKey;
   final String googleWebClientId;
   final String apiBaseUrl;
+  final String medicalDataApiKey;
 
   bool get cloudAuthAvailable => firebaseEnabled;
   bool get googleSignInConfigured => googleWebClientId.isNotEmpty && firebaseEnabled;
   bool get billingConfigured => revenueCatApiKey.isNotEmpty;
   bool get aiConfigured => aiProvider != 'none';
   bool get ocrConfigured => ocrProvider != 'none';
+  bool get medicalCatalogConfigured => apiBaseUrl.isNotEmpty && medicalDataApiKey.isNotEmpty;
 }

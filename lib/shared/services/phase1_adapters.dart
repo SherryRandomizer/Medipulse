@@ -18,7 +18,10 @@ class PrivacyAnalyticsService implements AnalyticsService {
     'subscription_started',
     'subscription_cancelled',
     'caregiver_invited',
+    'caregiver_invite_accepted',
     'ai_question_asked',
+    'health_sync_toggled',
+    'catalog_opened',
   };
 
   @override

@@ -460,6 +460,7 @@ class Caregiver {
     required this.createdAt,
     required this.updatedAt,
     this.caregiverUserId,
+    this.shareAdherencePercent = false,
   });
 
   final String id;
@@ -469,6 +470,7 @@ class Caregiver {
   final CaregiverRelation relation;
   final CaregiverPermissionStatus status;
   final bool shareAdherence;
+  final bool shareAdherencePercent;
   final String inviteCode;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -479,21 +481,34 @@ class Caregiver {
   Caregiver copyWith({
     CaregiverPermissionStatus? status,
     bool? shareAdherence,
+    bool? shareAdherencePercent,
+    String? caregiverUserId,
     DateTime? updatedAt,
   }) {
     return Caregiver(
       id: id,
       ownerUserId: ownerUserId,
       displayName: displayName,
-      caregiverUserId: caregiverUserId,
+      caregiverUserId: caregiverUserId ?? this.caregiverUserId,
       relation: relation,
       status: status ?? this.status,
       shareAdherence: shareAdherence ?? this.shareAdherence,
+      shareAdherencePercent: shareAdherencePercent ?? this.shareAdherencePercent,
       inviteCode: inviteCode,
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
+}
+
+class SharedAdherenceSnapshot {
+  const SharedAdherenceSnapshot({
+    required this.percentage,
+    required this.completedDoses,
+  });
+
+  final double percentage;
+  final int completedDoses;
 }
 
 class FamilyProfile {

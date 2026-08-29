@@ -1,5 +1,7 @@
 import 'package:clock/clock.dart';
+import 'package:medipulse/core/errors/app_failure.dart';
 import 'package:medipulse/core/storage/local_database.dart';
+import 'package:medipulse/features/adherence/domain/adherence_calculator.dart';
 import 'package:medipulse/features/caregivers/domain/caregiver_access_policy.dart';
 import 'package:medipulse/shared/models/entities.dart';
 import 'package:medipulse/shared/services/service_interfaces.dart';
@@ -41,9 +43,60 @@ class CaregiverAlertSink {
     return caregiver;
   }
 
-  Future<void> setSharing(Caregiver caregiver, {required bool share, required CaregiverPermissionStatus status}) {
+  Future<void> setSharing(
+    Caregiver caregiver, {
+    required bool share,
+    required CaregiverPermissionStatus status,
+    bool? sharePercent,
+  }) {
     return _db.upsertCaregiver(
-      caregiver.copyWith(shareAdherence: share, status: status, updatedAt: clock.now().toUtc()),
+      caregiver.copyWith(
+        shareAdherence: share,
+        shareAdherencePercent: sharePercent,
+        status: status,
+        updatedAt: clock.now().toUtc(),
+      ),
+    );
+  }
+
+  Future<Caregiver> acceptInvite({
+    required String code,
+    required String caregiverUserId,
+  }) async {
+    final found = await _db.caregiverByInviteCode(code);
+    if (found == null) {
+      throw const NotFoundFailure('That invite code was not found.');
+    }
+    if (found.caregiverUserId != null && found.caregiverUserId != caregiverUserId) {
+      throw const ValidationFailure('This invite is already linked to another account.');
+    }
+    final updated = found.copyWith(
+      caregiverUserId: caregiverUserId,
+      status: CaregiverPermissionStatus.accepted,
+      updatedAt: clock.now().toUtc(),
+    );
+    await _db.upsertCaregiver(updated);
+    return updated;
+  }
+
+  Future<List<Caregiver>> linkedAsCaregiver(String userId) => _db.caregiversLinkedTo(userId);
+
+  Future<SharedAdherenceSnapshot?> sharedPercentFor({
+    required String ownerUserId,
+    required String viewerUserId,
+  }) async {
+    final links = await _db.caregiversLinkedTo(viewerUserId);
+    final allowed = links.where(
+      (c) => c.ownerUserId == ownerUserId && CaregiverAccessPolicy.canViewAdherencePercent(c),
+    );
+    if (allowed.isEmpty) return null;
+    final now = clock.now().toUtc();
+    final from = now.subtract(const Duration(days: 7));
+    final doses = await _db.dosesForUser(ownerUserId, from: from, to: now);
+    final summary = AdherenceCalculator().summarize(doses);
+    return SharedAdherenceSnapshot(
+      percentage: summary.percentage,
+      completedDoses: summary.completed,
     );
   }
 

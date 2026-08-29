@@ -18,13 +18,15 @@ class LocalDatabase {
     final path = p.join(dir.path, 'medipulse.db');
     _db = await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: (db, _) async {
         await _createV1(db);
         await _createV2(db);
+        await _createV3(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) await _createV2(db);
+        if (oldVersion < 3) await _createV3(db);
       },
     );
     return _db!;
@@ -173,6 +175,27 @@ CREATE TABLE sync_queue (
 ''');
   }
 
+  Future<void> _createV3(Database db) async {
+    await db.execute(
+      'ALTER TABLE caregivers ADD COLUMN share_adherence_percent INTEGER NOT NULL DEFAULT 0',
+    );
+    await db.execute('''
+CREATE TABLE health_prefs (
+  user_id TEXT PRIMARY KEY,
+  enabled INTEGER NOT NULL,
+  include_names INTEGER NOT NULL,
+  updated_at TEXT NOT NULL
+)
+''');
+    await db.execute('''
+CREATE TABLE health_events (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  taken_at TEXT NOT NULL
+)
+''');
+  }
+
   Future<void> upsertUser(UserProfile user, {String? passwordHash, String? passwordSalt}) async {
     final db = await database;
     await db.insert('users', {
@@ -241,6 +264,8 @@ CREATE TABLE sync_queue (
       await txn.delete('family_profiles', where: 'owner_user_id = ?', whereArgs: [userId]);
       await txn.delete('subscriptions', where: 'user_id = ?', whereArgs: [userId]);
       await txn.delete('sync_queue', where: 'user_id = ?', whereArgs: [userId]);
+      await txn.delete('health_prefs', where: 'user_id = ?', whereArgs: [userId]);
+      await txn.delete('health_events', where: 'user_id = ?', whereArgs: [userId]);
       await txn.delete('users', where: 'id = ?', whereArgs: [userId]);
     });
   }
@@ -591,6 +616,7 @@ CREATE TABLE sync_queue (
       'relation': caregiver.relation.name,
       'status': caregiver.status.name,
       'share_adherence': caregiver.shareAdherence ? 1 : 0,
+      'share_adherence_percent': caregiver.shareAdherencePercent ? 1 : 0,
       'invite_code': caregiver.inviteCode,
       'created_at': caregiver.createdAt.toIso8601String(),
       'updated_at': caregiver.updatedAt.toIso8601String(),
@@ -604,6 +630,27 @@ CREATE TABLE sync_queue (
       where: 'owner_user_id = ?',
       whereArgs: [ownerUserId],
       orderBy: 'display_name COLLATE NOCASE',
+    );
+    return rows.map(_caregiverFrom).toList();
+  }
+
+  Future<Caregiver?> caregiverByInviteCode(String code) async {
+    final db = await database;
+    final rows = await db.query(
+      'caregivers',
+      where: 'invite_code = ?',
+      whereArgs: [code.trim().toUpperCase()],
+    );
+    if (rows.isEmpty) return null;
+    return _caregiverFrom(rows.first);
+  }
+
+  Future<List<Caregiver>> caregiversLinkedTo(String caregiverUserId) async {
+    final db = await database;
+    final rows = await db.query(
+      'caregivers',
+      where: 'caregiver_user_id = ?',
+      whereArgs: [caregiverUserId],
     );
     return rows.map(_caregiverFrom).toList();
   }
@@ -704,6 +751,58 @@ CREATE TABLE sync_queue (
     );
   }
 
+  Future<void> upsertHealthPrefs({
+    required String userId,
+    required bool enabled,
+    required bool includeNames,
+    required DateTime updatedAt,
+  }) async {
+    final db = await database;
+    await db.insert('health_prefs', {
+      'user_id': userId,
+      'enabled': enabled ? 1 : 0,
+      'include_names': includeNames ? 1 : 0,
+      'updated_at': updatedAt.toIso8601String(),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<({bool enabled, bool includeNames, DateTime updatedAt})?> healthPrefRow(String userId) async {
+    final db = await database;
+    final rows = await db.query('health_prefs', where: 'user_id = ?', whereArgs: [userId]);
+    if (rows.isEmpty) return null;
+    final row = rows.first;
+    return (
+      enabled: row['enabled'] == 1,
+      includeNames: row['include_names'] == 1,
+      updatedAt: DateTime.parse(row['updated_at']! as String),
+    );
+  }
+
+  Future<void> insertHealthEvent({
+    required String id,
+    required String userId,
+    required DateTime takenAt,
+  }) async {
+    final db = await database;
+    await db.insert('health_events', {
+      'id': id,
+      'user_id': userId,
+      'taken_at': takenAt.toIso8601String(),
+    });
+  }
+
+  Future<List<DateTime>> healthEventTimes(String userId) async {
+    final db = await database;
+    final rows = await db.query(
+      'health_events',
+      where: 'user_id = ?',
+      whereArgs: [userId],
+      orderBy: 'taken_at DESC',
+      limit: 40,
+    );
+    return [for (final row in rows) DateTime.parse(row['taken_at']! as String)];
+  }
+
   Caregiver _caregiverFrom(Map<String, Object?> row) {
     return Caregiver(
       id: row['id']! as String,
@@ -713,6 +812,7 @@ CREATE TABLE sync_queue (
       relation: CaregiverRelation.values.byName(row['relation']! as String),
       status: CaregiverPermissionStatus.values.byName(row['status']! as String),
       shareAdherence: row['share_adherence'] == 1,
+      shareAdherencePercent: row['share_adherence_percent'] == 1,
       inviteCode: row['invite_code']! as String,
       createdAt: DateTime.parse(row['created_at']! as String),
       updatedAt: DateTime.parse(row['updated_at']! as String),

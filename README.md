@@ -6,35 +6,29 @@ Production Flutter app for medication reminders on Android and iOS.
 
 Package ID: `com.wellardislab.medipulse`
 
-## Phase 1 status
+## Status
 
 Implemented and covered by unit/widget tests:
 
-- Feature-first clean architecture and service abstractions
-- Material 3 healthcare theme and reusable components
-- Onboarding, local email/password auth, guest mode
-- Medication CRUD wizard, scheduling engine, local SQLite
-- Local notifications, taken / snooze / skip, missed detection
-- Today dashboard, calendar, basic adherence, search, settings
-- Privacy-conscious analytics stubs, subscription/ad/AI/OCR interfaces
-- Firestore security rules (not deployed until Firebase is configured)
-- On-device OCR + heuristic extraction with mandatory review before save
-- Package scan (never treated as medically certain)
-- PDF adherence reports with share/export
-- Refill quantity tracking that decreases when a dose is taken
-- Family profiles and caregiver invite/share switches (Premium)
+- Feature-first architecture, Material 3 theme, onboarding, local auth, guest mode
+- Medication CRUD, scheduling engine, SQLite, local notifications, taken / snooze / skip
+- Dashboard, calendar, adherence, scanning with mandatory review, PDF reports, refills
+- Family profiles, caregiver invites, missed-dose alerts without medicine names
 - MediPulse AI answers from the saved schedule only
 - Cloud sync queue (uploads when Firebase is enabled)
 - Subscription entitlements stored per account; ads never on dose confirmation
+- English, Spanish, Urdu, and Arabic UI for navigation, settings, catalog, health, and family
+- Licensed medicine catalog **interface** (empty unless `API_BASE_URL` and `MEDICAL_DATA_API_KEY` are set)
+- Health / wearable **opt-in journal** of dose-taken times (no invented vitals; native Health Connect / HealthKit SDKs are not linked)
 
-Not implemented yet (later phases, not claimed complete):
+Not implemented yet (not claimed complete):
 
 - Firebase Auth / Firestore sync / FCM / Crashlytics
 - Google and Apple sign-in (UI present; requires credentials)
 - Cloud AI providers (local heuristic extraction is the default)
-- MediPulse AI assistant
-- Family/caregiver sharing
-- RevenueCat billing, ads
+- RevenueCat / store billing and a production ads SDK
+- A licensed drug database or interaction feed (requires a contracted provider)
+- Native Apple Health / Health Connect / wearable SDKs
 - Custom branded store icons
 
 ## Run

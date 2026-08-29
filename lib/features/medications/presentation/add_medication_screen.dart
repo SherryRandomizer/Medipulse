@@ -303,6 +303,16 @@ class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
                                 );
                                 return;
                               }
+                              if (_step == 0 && _method == 'catalog') {
+                                await ref.read(analyticsServiceProvider).logEvent('catalog_opened');
+                                if (!context.mounted) return;
+                                final name = await context.push<String>('/catalog');
+                                if (name != null && name.trim().isNotEmpty) {
+                                  _name.text = name.trim();
+                                }
+                                setState(() => _step = 1);
+                                return;
+                              }
                               if (_step == 4) {
                                 _save();
                               } else {
@@ -329,6 +339,7 @@ class _AddMedicationScreenState extends ConsumerState<AddMedicationScreen> {
         _choice('manual', 'Enter manually', 'Fastest. Type the name, dose, and times.'),
         _choice('prescription', 'Scan prescription', 'You must confirm every field. Nothing is saved automatically.'),
         _choice('package', 'Scan medicine / package', 'Identification from a photo is never medically certain.'),
+        _choice('catalog', 'Licensed catalog', 'Uses a licensed provider only. This build will not invent names or interactions.'),
         const SizedBox(height: 12),
         Text(LegalCopy.aiSafety, style: Theme.of(context).textTheme.bodyMedium),
       ],

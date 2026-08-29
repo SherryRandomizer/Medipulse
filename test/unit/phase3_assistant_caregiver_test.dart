@@ -112,6 +112,7 @@ void main() {
       revenueCatApiKey: '',
       googleWebClientId: '',
       apiBaseUrl: '',
+      medicalDataApiKey: '',
     );
     expect(ConfigAdService(config).adsEnabledFor(free), isTrue);
     expect(ConfigAdService(config).adsEnabledFor(premium), isFalse);

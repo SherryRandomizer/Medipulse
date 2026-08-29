@@ -47,6 +47,12 @@ class ProfileScreen extends ConsumerWidget {
                   onTap: () => context.push('/family'),
                 ),
                 ListTile(
+                  title: const Text('Health & wearables'),
+                  subtitle: const Text('Opt in to dose-taken times. Native Health SDKs are not linked yet.'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.push('/settings/health'),
+                ),
+                ListTile(
                   title: const Text('MediPulse AI'),
                   subtitle: const Text('Ask about your saved schedule only.'),
                   trailing: const Icon(Icons.chevron_right),

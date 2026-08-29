@@ -8,6 +8,10 @@ class CaregiverAccessPolicy {
     return caregiver.status == CaregiverPermissionStatus.accepted && caregiver.shareAdherence;
   }
 
+  static bool canViewAdherencePercent(Caregiver caregiver) {
+    return caregiver.status == CaregiverPermissionStatus.accepted && caregiver.shareAdherencePercent;
+  }
+
   static String missedAlertBody({
     required String firstName,
     required DateTime scheduledAt,

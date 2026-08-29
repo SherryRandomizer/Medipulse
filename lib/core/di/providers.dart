@@ -13,7 +13,9 @@ import 'package:medipulse/shared/models/entities.dart';
 import 'package:medipulse/features/scanner/data/heuristic_ai_service.dart';
 import 'package:medipulse/features/scanner/data/mlkit_ocr_service.dart';
 import 'package:medipulse/features/scanner/domain/scanner_pipeline.dart';
+import 'package:medipulse/features/catalog/domain/licensed_catalog.dart';
 import 'package:medipulse/features/caregivers/domain/caregiver_service.dart';
+import 'package:medipulse/features/health/domain/health_sync.dart';
 import 'package:medipulse/shared/services/phase1_adapters.dart';
 import 'package:medipulse/shared/services/phase3_adapters.dart';
 import 'package:medipulse/shared/services/service_interfaces.dart';
@@ -56,6 +58,18 @@ final caregiverServiceProvider = Provider<CaregiverAlertSink>((ref) {
   );
 });
 
+final healthSyncServiceProvider = Provider<HealthSyncService>((ref) {
+  return HealthSyncService(database: ref.watch(localDatabaseProvider));
+});
+
+final licensedCatalogProvider = Provider<LicensedMedicationCatalog>((ref) {
+  final config = ref.watch(appConfigProvider);
+  if (config.medicalCatalogConfigured) {
+    return HttpLicensedMedicationCatalog(config: config);
+  }
+  return const UnconfiguredLicensedCatalog();
+});
+
 final cloudSyncServiceProvider = Provider<LocalCloudSyncService>((ref) {
   return LocalCloudSyncService(
     database: ref.watch(localDatabaseProvider),
@@ -96,6 +110,7 @@ final medicationCoordinatorProvider = Provider<MedicationCoordinator>((ref) {
     subscriptions: ref.watch(subscriptionServiceProvider),
     analytics: ref.watch(analyticsServiceProvider),
     caregiverAlerts: ref.watch(caregiverServiceProvider),
+    healthSync: ref.watch(healthSyncServiceProvider),
     refillCalculator: ref.watch(refillCalculatorProvider),
     engine: ref.watch(schedulingEngineProvider),
   );
