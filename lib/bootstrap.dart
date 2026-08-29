@@ -7,6 +7,7 @@ import 'package:timezone/timezone.dart' as tz;
 import 'package:medipulse/core/di/app_controllers.dart';
 import 'package:medipulse/core/di/providers.dart';
 import 'package:medipulse/core/notifications/local_notification_service.dart';
+import 'package:medipulse/core/notifications/pending_dose_action_store.dart';
 import 'package:medipulse/shared/models/entities.dart';
 
 Future<ProviderContainer> bootstrap() async {
@@ -24,18 +25,10 @@ Future<ProviderContainer> bootstrap() async {
   await notifications.initialize();
   if (notifications is LocalNotificationService) {
     notifications.onAction = (action, doseId) async {
-      final dose = await container.read(doseRepositoryProvider).getById(doseId);
-      if (dose == null) return;
-      final mapped = switch (action) {
-        LocalNotificationService.takenAction => DoseStatus.taken,
-        LocalNotificationService.skipAction => DoseStatus.skipped,
-        LocalNotificationService.snoozeAction => DoseStatus.snoozed,
-        _ => null,
-      };
-      if (mapped == null) return;
-      await container.read(medicationCoordinatorProvider).actOnDose(dose, mapped);
+      await _applyDoseAction(container, action, doseId);
     };
   }
+  await _applyPendingDoseActions(container);
 
   await container.read(analyticsServiceProvider).logEvent('app_open');
   final user = await container.read(authServiceProvider).currentUser();
@@ -57,6 +50,25 @@ Future<String> resolveStartLocation(ProviderContainer container) async {
   final prompted = await container.read(notificationPromptedProvider.future);
   if (!prompted) return '/permissions';
   return '/home';
+}
+
+Future<void> _applyPendingDoseActions(ProviderContainer container) async {
+  final pending = await PendingDoseActionStore().take();
+  if (pending == null) return;
+  await _applyDoseAction(container, pending.actionId, pending.doseId);
+}
+
+Future<void> _applyDoseAction(ProviderContainer container, String action, String doseId) async {
+  final dose = await container.read(doseRepositoryProvider).getById(doseId);
+  if (dose == null) return;
+  final mapped = switch (action) {
+    LocalNotificationService.takenAction => DoseStatus.taken,
+    LocalNotificationService.skipAction => DoseStatus.skipped,
+    LocalNotificationService.snoozeAction => DoseStatus.snoozed,
+    _ => null,
+  };
+  if (mapped == null) return;
+  await container.read(medicationCoordinatorProvider).actOnDose(dose, mapped);
 }
 
 void goToStart(BuildContext context, String location) {

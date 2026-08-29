@@ -177,9 +177,21 @@ class ReminderCard extends StatelessWidget {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  FilledButton(onPressed: onTaken, child: const Text('Taken')),
-                  OutlinedButton(onPressed: onSnooze, child: const Text('Snooze')),
-                  TextButton(onPressed: onSkip, child: const Text('Skip')),
+                  Semantics(
+                    button: true,
+                    label: 'Mark ${item.medication.name} as taken',
+                    child: FilledButton(onPressed: onTaken, child: const Text('Taken')),
+                  ),
+                  Semantics(
+                    button: true,
+                    label: 'Snooze reminder for ${item.medication.name}',
+                    child: OutlinedButton(onPressed: onSnooze, child: const Text('Snooze')),
+                  ),
+                  Semantics(
+                    button: true,
+                    label: 'Skip dose of ${item.medication.name}',
+                    child: TextButton(onPressed: onSkip, child: const Text('Skip')),
+                  ),
                 ],
               ),
             ],

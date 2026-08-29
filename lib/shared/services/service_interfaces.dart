@@ -30,6 +30,9 @@ abstract class NotificationService {
   Future<bool> initialize();
   Future<bool> requestPermission();
   Future<bool> hasPermission();
+  Future<bool> canScheduleExactAlarms();
+  Future<bool> requestExactAlarms();
+  Future<void> openSystemNotificationSettings();
   Future<void> scheduleDoseReminder({
     required MedicationDose dose,
     required Medication medication,

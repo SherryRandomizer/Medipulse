@@ -1,10 +1,26 @@
+import 'dart:async';
+
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:medipulse/core/logging/app_logger.dart';
+import 'package:medipulse/core/notifications/pending_dose_action_store.dart';
 import 'package:medipulse/shared/models/entities.dart';
 import 'package:medipulse/shared/services/service_interfaces.dart';
 
 typedef NotificationActionCallback = Future<void> Function(String actionId, String doseId);
+
+@pragma('vm:entry-point')
+void medipulseNotificationTapBackground(NotificationResponse response) {
+  final doseId = response.payload;
+  if (doseId == null || doseId.isEmpty) return;
+  unawaited(
+    PendingDoseActionStore().save(
+      actionId: response.actionId ?? 'open',
+      doseId: doseId,
+    ),
+  );
+}
 
 class LocalNotificationService implements NotificationService {
   LocalNotificationService({
@@ -19,6 +35,7 @@ class LocalNotificationService implements NotificationService {
   static const takenAction = 'taken';
   static const snoozeAction = 'snooze';
   static const skipAction = 'skip';
+  static const doseCategoryId = 'DOSE_CATEGORY';
 
   final FlutterLocalNotificationsPlugin _plugin;
   final AppLogger _logger;
@@ -27,19 +44,30 @@ class LocalNotificationService implements NotificationService {
   @override
   Future<bool> initialize() async {
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const ios = DarwinInitializationSettings(
+    final ios = DarwinInitializationSettings(
       requestAlertPermission: false,
       requestBadgePermission: false,
       requestSoundPermission: false,
+      notificationCategories: [
+        DarwinNotificationCategory(
+          doseCategoryId,
+          actions: [
+            DarwinNotificationAction.plain(takenAction, 'Taken'),
+            DarwinNotificationAction.plain(snoozeAction, 'Snooze'),
+            DarwinNotificationAction.plain(skipAction, 'Skip'),
+          ],
+        ),
+      ],
     );
     await _plugin.initialize(
-      const InitializationSettings(android: android, iOS: ios),
+      InitializationSettings(android: android, iOS: ios),
       onDidReceiveNotificationResponse: (response) async {
         final doseId = response.payload;
         if (doseId == null || onAction == null) return;
         final action = response.actionId ?? 'open';
         await onAction!(action, doseId);
       },
+      onDidReceiveBackgroundNotificationResponse: medipulseNotificationTapBackground,
     );
     const channel = AndroidNotificationChannel(
       channelId,
@@ -50,6 +78,14 @@ class LocalNotificationService implements NotificationService {
     await _plugin
         .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(channel);
+    final launch = await _plugin.getNotificationAppLaunchDetails();
+    final response = launch?.notificationResponse;
+    if (launch?.didNotificationLaunchApp == true && response?.payload != null) {
+      await PendingDoseActionStore().save(
+        actionId: response!.actionId ?? 'open',
+        doseId: response.payload!,
+      );
+    }
     return true;
   }
 
@@ -64,6 +100,23 @@ class LocalNotificationService implements NotificationService {
         await ios?.requestPermissions(alert: true, badge: true, sound: true) ?? true;
     return androidOk && iosOk;
   }
+
+  @override
+  Future<bool> canScheduleExactAlarms() async {
+    final android = _plugin
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    return await android?.canScheduleExactNotifications() ?? true;
+  }
+
+  @override
+  Future<bool> requestExactAlarms() async {
+    final android = _plugin
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    return await android?.requestExactAlarmsPermission() ?? true;
+  }
+
+  @override
+  Future<void> openSystemNotificationSettings() => openAppSettings();
 
   @override
   Future<bool> hasPermission() async {
@@ -96,7 +149,7 @@ class LocalNotificationService implements NotificationService {
         ],
       ),
       iOS: DarwinNotificationDetails(
-        categoryIdentifier: 'DOSE_CATEGORY',
+        categoryIdentifier: LocalNotificationService.doseCategoryId,
         presentAlert: true,
         presentSound: true,
         presentBadge: true,

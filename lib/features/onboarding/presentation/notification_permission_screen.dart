@@ -19,6 +19,7 @@ class _NotificationPermissionScreenState extends ConsumerState<NotificationPermi
     setState(() => _busy = true);
     if (request) {
       await ref.read(notificationServiceProvider).requestPermission();
+      await ref.read(notificationServiceProvider).requestExactAlarms();
     }
     await ref.read(localDatabaseProvider).setState('notification_prompted', 'true');
     if (mounted) context.go('/home');
@@ -37,7 +38,7 @@ class _NotificationPermissionScreenState extends ConsumerState<NotificationPermi
               Text('Allow reminders', style: Theme.of(context).textTheme.headlineMedium),
               const SizedBox(height: 16),
               Text(
-                'MediPulse uses notifications to remind you when it is time to take a medication — even if the app is closed.\n\nNotifications are required for reliable reminders. We will never use them for marketing.',
+                'MediPulse uses notifications to remind you when it is time to take a medication — even if the app is closed.\n\nOn Android, exact alarms keep those reminders on time. Notifications are never used for marketing.',
                 style: Theme.of(context).textTheme.bodyLarge,
               ),
               const Spacer(),

@@ -22,6 +22,7 @@ Implemented and covered by unit/widget tests:
 - Health / wearable **opt-in journal** of dose-taken times (no invented vitals; native Health Connect / HealthKit SDKs are not linked)
 - Branded launcher and splash mark, iOS privacy manifest, and Play/App Store listing placeholders
 - Profile name, optional photo and date of birth, and time zone; medication search includes archived records
+- Exact-alarm request, iOS reminder actions, and applying Taken/Snooze/Skip if a notification was tapped while the app was closed
 
 Not implemented yet (not claimed complete):
 

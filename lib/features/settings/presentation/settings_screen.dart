@@ -311,6 +311,34 @@ class NotificationSettingsScreen extends ConsumerWidget {
                 title: Text('Snooze options'),
                 subtitle: Text('5, 10, 30 minutes, and 1 hour'),
               ),
+              FutureBuilder(
+                future: Future.wait([
+                  ref.read(notificationServiceProvider).hasPermission(),
+                  ref.read(notificationServiceProvider).canScheduleExactAlarms(),
+                ]),
+                builder: (context, snapshot) {
+                  final allowed = snapshot.data;
+                  final notices = allowed == null
+                      ? 'Checking reminder permissions…'
+                      : 'Notifications: ${allowed[0] ? 'on' : 'off'}. Exact alarms: ${allowed[1] ? 'allowed' : 'not allowed (reminders may be late on Android)'}.';
+                  return Column(
+                    children: [
+                      ListTile(subtitle: Text(notices)),
+                      ListTile(
+                        title: const Text('Allow exact alarms'),
+                        subtitle: const Text('Keeps Android reminders on time. iOS does not use this setting.'),
+                        onTap: () async {
+                          await ref.read(notificationServiceProvider).requestExactAlarms();
+                        },
+                      ),
+                      ListTile(
+                        title: const Text('Open system notification settings'),
+                        onTap: () => ref.read(notificationServiceProvider).openSystemNotificationSettings(),
+                      ),
+                    ],
+                  );
+                },
+              ),
             ],
           );
         },
