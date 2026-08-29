@@ -1,0 +1,42 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function caregiverCanRead(ownerId) {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/users/$(ownerId)/caregivers/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(ownerId)/caregivers/$(request.auth.uid)).data.status == 'accepted';
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || caregiverCanRead(userId);
+      allow create, update, delete: if isOwner(userId);
+
+      match /medications/{medicationId} {
+        allow read: if isOwner(userId) || caregiverCanRead(userId);
+        allow write: if isOwner(userId);
+
+        match /doses/{doseId} {
+          allow read: if isOwner(userId) || caregiverCanRead(userId);
+          allow write: if isOwner(userId);
+        }
+      }
+
+      match /caregivers/{caregiverId} {
+        allow read: if isOwner(userId) || request.auth.uid == caregiverId;
+        allow write: if isOwner(userId);
+      }
+
+      match /private/{document=**} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+  }
+}
