@@ -26,3 +26,10 @@ Replace every field with counsel-reviewed copy before submission. Do not claim M
 ## Screenshots
 
 Capture Home (today), Add medication, Calendar, and Reports with the medical disclaimer visible.
+
+## Android release signing
+
+1. Copy `android/key.properties.example` to `android/key.properties` (gitignored).
+2. Point `storeFile` at your upload keystore. Never commit `.jks` or `key.properties`.
+3. Without that file, `flutter build apk --release` still uses the debug keystore so local testing works — do not upload that artifact to Play.
+4. Prefer `flutter build appbundle --release --obfuscate --split-debug-info=build/symbols`.

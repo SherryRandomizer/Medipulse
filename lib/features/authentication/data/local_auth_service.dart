@@ -4,6 +4,7 @@ import 'package:medipulse/core/constants/app_constants.dart';
 import 'package:medipulse/core/errors/app_failure.dart';
 import 'package:medipulse/core/security/password_hasher.dart';
 import 'package:medipulse/core/storage/local_database.dart';
+import 'package:medipulse/features/authentication/domain/auth_validators.dart';
 import 'package:medipulse/shared/models/entities.dart';
 import 'package:medipulse/shared/services/service_interfaces.dart';
 import 'package:uuid/uuid.dart';
@@ -66,11 +67,12 @@ class LocalAuthService implements AuthService {
     String? timeZone,
   }) async {
     final normalized = email.trim().toLowerCase();
-    if (!_looksLikeEmail(normalized)) {
+    if (!AuthValidators.looksLikeEmail(normalized)) {
       throw const ValidationFailure('Enter a valid email address.');
     }
-    if (password.length < 8) {
-      throw const ValidationFailure('Use a password with at least 8 characters.');
+    final passwordIssue = AuthValidators.passwordIssue(password);
+    if (passwordIssue != null) {
+      throw ValidationFailure(passwordIssue);
     }
     if (await _db.userAuthRow(normalized) != null) {
       throw const AuthFailure('An account with that email already exists.');
@@ -186,7 +188,4 @@ class LocalAuthService implements AuthService {
     await _db.upsertUser(profile.copyWith(updatedAt: clock.now().toUtc()));
     return (await _db.userById(profile.id))!;
   }
-
-  bool _looksLikeEmail(String value) =>
-      RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value);
 }

@@ -24,6 +24,7 @@ Implemented and covered by unit/widget tests:
 - Profile name, optional photo and date of birth, and time zone; medication search includes archived records
 - Exact-alarm request, iOS reminder actions, and applying Taken/Snooze/Skip if a notification was tapped while the app was closed
 - Optional redacted crash reports via `SENTRY_DSN` (error type and MediPulse frames only; medicine names stripped)
+- Release signing reads `android/key.properties` when present (file is gitignored); cleartext HTTP is blocked
 
 Not implemented yet (not claimed complete):
 
