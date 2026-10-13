@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:medipulse/core/di/providers.dart';
+import 'package:medipulse/features/dashboard/domain/home_dose_visibility.dart';
 import 'package:medipulse/features/medications/domain/medication_search.dart';
 import 'package:medipulse/shared/models/entities.dart';
 
@@ -44,12 +45,14 @@ final homeSnapshotProvider = FutureProvider<HomeSnapshot?>((ref) async {
   final end = start.add(const Duration(days: 1));
   final doses = await ref.read(doseRepositoryProvider).forUser(user.id, from: start, to: end);
   final byId = {for (final m in medications) m.id: m};
+  final visible = HomeDoseVisibility(ref.read(schedulingEngineProvider)).visibleDoses(
+    doses: doses,
+    medications: byId,
+  );
   final items = [
-    for (final dose in doses)
-      if (byId.containsKey(dose.medicationId))
-        TimelineItem(dose: dose, medication: byId[dose.medicationId]!),
+    for (final dose in visible) TimelineItem(dose: dose, medication: byId[dose.medicationId]!),
   ];
-  final summary = ref.read(adherenceCalculatorProvider).summarize(doses);
+  final summary = ref.read(adherenceCalculatorProvider).summarize(visible);
   final refill = ref.read(refillCalculatorProvider);
   final warnings = [
     for (final med in medications)

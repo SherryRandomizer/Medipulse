@@ -3,7 +3,10 @@ import 'package:medipulse/shared/models/entities.dart';
 abstract class AuthService {
   Stream<UserProfile?> authState();
   Future<UserProfile?> currentUser();
-  Future<UserProfile> signInWithEmail({required String email, required String password});
+  Future<UserProfile> signInWithEmail({
+    required String email,
+    required String password,
+  });
   Future<UserProfile> registerWithEmail({
     required String email,
     required String password,
@@ -38,7 +41,12 @@ abstract class NotificationService {
     required Medication medication,
   });
   Future<void> cancelDose(String doseId);
-  Future<void> cancelMedication(String medicationId);
+  Future<void> cancelMedication(
+    String medicationId, {
+    Set<String> priorDoseIds = const {},
+  });
+  Future<List<String>> trackedMedicationIds();
+  Future<void> cancelAllReminders();
   Future<void> showImmediate({required String title, required String body});
 }
 
@@ -83,6 +91,10 @@ abstract class DoseRepository {
   Future<void> replacePending(String medicationId, List<MedicationDose> doses);
   Future<void> save(MedicationDose dose);
   Future<MedicationDose?> getById(String id);
-  Future<List<MedicationDose>> forUser(String userId, {DateTime? from, DateTime? to});
+  Future<List<MedicationDose>> forUser(
+    String userId, {
+    DateTime? from,
+    DateTime? to,
+  });
   Future<List<MedicationDose>> pending(String userId);
 }

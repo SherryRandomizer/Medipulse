@@ -5,10 +5,12 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:medipulse/core/logging/app_logger.dart';
 import 'package:medipulse/core/notifications/pending_dose_action_store.dart';
+import 'package:medipulse/core/notifications/reminder_alarm_registry.dart';
 import 'package:medipulse/shared/models/entities.dart';
 import 'package:medipulse/shared/services/service_interfaces.dart';
 
-typedef NotificationActionCallback = Future<void> Function(String actionId, String doseId);
+typedef NotificationActionCallback =
+    Future<void> Function(String actionId, String doseId);
 
 @pragma('vm:entry-point')
 void medipulseNotificationTapBackground(NotificationResponse response) {
@@ -22,13 +24,38 @@ void medipulseNotificationTapBackground(NotificationResponse response) {
   );
 }
 
+/// Test seam for zoned scheduling and integer cancel without a real OS plugin.
+abstract class NotificationAlarmGateway {
+  Future<void> cancel(int id);
+
+  Future<void> show({
+    required int id,
+    required String title,
+    required String body,
+  });
+
+  Future<void> zonedSchedule({
+    required int id,
+    required String title,
+    required String body,
+    required tz.TZDateTime when,
+    required NotificationDetails details,
+    required AndroidScheduleMode androidScheduleMode,
+    required String payload,
+  });
+}
+
 class LocalNotificationService implements NotificationService {
   LocalNotificationService({
     FlutterLocalNotificationsPlugin? plugin,
+    ReminderAlarmRegistry? registry,
     AppLogger logger = const AppLogger(),
     NotificationActionCallback? onAction,
+    NotificationAlarmGateway? alarms,
   }) : _plugin = plugin ?? FlutterLocalNotificationsPlugin(),
+       _registry = registry ?? ReminderAlarmRegistry(),
        _logger = logger,
+       _alarms = alarms,
        onAction = onAction;
 
   static const channelId = 'medipulse_doses';
@@ -37,8 +64,13 @@ class LocalNotificationService implements NotificationService {
   static const skipAction = 'skip';
   static const doseCategoryId = 'DOSE_CATEGORY';
 
+  /// Integer AlarmManager / plugin ID used before [ReminderAlarmRegistry].
+  static int legacyAlarmId(String doseId) => doseId.hashCode & 0x7fffffff;
+
   final FlutterLocalNotificationsPlugin _plugin;
+  final ReminderAlarmRegistry _registry;
   final AppLogger _logger;
+  final NotificationAlarmGateway? _alarms;
   NotificationActionCallback? onAction;
 
   @override
@@ -67,7 +99,8 @@ class LocalNotificationService implements NotificationService {
         final action = response.actionId ?? 'open';
         await onAction!(action, doseId);
       },
-      onDidReceiveBackgroundNotificationResponse: medipulseNotificationTapBackground,
+      onDidReceiveBackgroundNotificationResponse:
+          medipulseNotificationTapBackground,
     );
     const channel = AndroidNotificationChannel(
       channelId,
@@ -76,7 +109,9 @@ class LocalNotificationService implements NotificationService {
       importance: Importance.max,
     );
     await _plugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
         ?.createNotificationChannel(channel);
     final launch = await _plugin.getNotificationAppLaunchDetails();
     final response = launch?.notificationResponse;
@@ -92,26 +127,35 @@ class LocalNotificationService implements NotificationService {
   @override
   Future<bool> requestPermission() async {
     final android = _plugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
     final ios = _plugin
-        .resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>();
+        .resolvePlatformSpecificImplementation<
+          IOSFlutterLocalNotificationsPlugin
+        >();
     final androidOk = await android?.requestNotificationsPermission() ?? true;
     final iosOk =
-        await ios?.requestPermissions(alert: true, badge: true, sound: true) ?? true;
+        await ios?.requestPermissions(alert: true, badge: true, sound: true) ??
+        true;
     return androidOk && iosOk;
   }
 
   @override
   Future<bool> canScheduleExactAlarms() async {
     final android = _plugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
     return await android?.canScheduleExactNotifications() ?? true;
   }
 
   @override
   Future<bool> requestExactAlarms() async {
     final android = _plugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
     return await android?.requestExactAlarmsPermission() ?? true;
   }
 
@@ -121,7 +165,9 @@ class LocalNotificationService implements NotificationService {
   @override
   Future<bool> hasPermission() async {
     final android = _plugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
     return await android?.areNotificationsEnabled() ?? true;
   }
 
@@ -130,7 +176,9 @@ class LocalNotificationService implements NotificationService {
     required MedicationDose dose,
     required Medication medication,
   }) async {
-    if (dose.remindAt.isBefore(DateTime.now().toUtc().subtract(const Duration(minutes: 1)))) {
+    if (dose.remindAt.isBefore(
+      DateTime.now().toUtc().subtract(const Duration(minutes: 1)),
+    )) {
       return;
     }
     final when = tz.TZDateTime.from(dose.remindAt.toLocal(), tz.local);
@@ -143,9 +191,21 @@ class LocalNotificationService implements NotificationService {
         priority: Priority.max,
         category: AndroidNotificationCategory.reminder,
         actions: const [
-          AndroidNotificationAction(takenAction, 'Taken', showsUserInterface: true),
-          AndroidNotificationAction(snoozeAction, 'Snooze', showsUserInterface: true),
-          AndroidNotificationAction(skipAction, 'Skip', showsUserInterface: true),
+          AndroidNotificationAction(
+            takenAction,
+            'Taken',
+            showsUserInterface: true,
+          ),
+          AndroidNotificationAction(
+            snoozeAction,
+            'Snooze',
+            showsUserInterface: true,
+          ),
+          AndroidNotificationAction(
+            skipAction,
+            'Skip',
+            showsUserInterface: true,
+          ),
         ],
       ),
       iOS: DarwinNotificationDetails(
@@ -155,42 +215,130 @@ class LocalNotificationService implements NotificationService {
         presentBadge: true,
       ),
     );
+    final id = await _registry.allocate(
+      medicationId: medication.id,
+      doseId: dose.id,
+    );
+    await _cancelPluginId(id);
+    final title = 'Time for ${medication.name}';
+    final body = _body(medication);
     try {
-      await _plugin.zonedSchedule(
-        _id(dose.id),
-        'Time for ${medication.name}',
-        _body(medication),
-        when,
-        details,
+      await _zonedSchedule(
+        id: id,
+        title: title,
+        body: body,
+        when: when,
+        details: details,
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         payload: dose.id,
       );
     } catch (error) {
-      _logger.error('Unable to schedule reminder');
-      await _plugin.zonedSchedule(
-        _id(dose.id),
-        'Time for ${medication.name}',
-        _body(medication),
-        when,
-        details,
-        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-        payload: dose.id,
-      );
+      _logger.error('Unable to schedule reminder', error);
+      try {
+        await _zonedSchedule(
+          id: id,
+          title: title,
+          body: body,
+          when: when,
+          details: details,
+          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+          payload: dose.id,
+        );
+      } catch (inexactError, stack) {
+        _logger.error('Unable to schedule reminder', inexactError);
+        try {
+          await _cancelPluginId(id);
+        } catch (cancelError) {
+          _logger.error('Unable to cancel failed reminder', cancelError);
+        } finally {
+          try {
+            await _registry.releaseDose(dose.id);
+          } catch (releaseError) {
+            _logger.error('Unable to release failed reminder id', releaseError);
+          }
+        }
+        Error.throwWithStackTrace(inexactError, stack);
+      }
     }
   }
 
   @override
-  Future<void> cancelDose(String doseId) => _plugin.cancel(_id(doseId));
-
-  @override
-  Future<void> cancelMedication(String medicationId) async {
-    // Individual dose ids are cancelled by the reminder coordinator.
+  Future<void> cancelDose(String doseId) async {
+    await _cancelPluginId(legacyAlarmId(doseId));
+    final id = await _registry.idForDose(doseId);
+    if (id == null) return;
+    try {
+      await _cancelPluginId(id);
+    } catch (error, stack) {
+      _logger.error('Unable to cancel reminder', error);
+      try {
+        await _registry.releaseDose(doseId);
+      } catch (releaseError) {
+        _logger.error('Unable to release reminder id', releaseError);
+      }
+      Error.throwWithStackTrace(error, stack);
+    }
+    await _registry.releaseDose(doseId);
   }
 
   @override
-  Future<void> showImmediate({required String title, required String body}) {
-    return _plugin.show(
-      title.hashCode & 0x7fffffff,
+  Future<void> cancelMedication(
+    String medicationId, {
+    Set<String> priorDoseIds = const {},
+  }) async {
+    for (final doseId in priorDoseIds) {
+      await _plugin.cancel(legacyAlarmId(doseId));
+    }
+    try {
+      final pending = await _plugin.pendingNotificationRequests();
+      for (final request in pending) {
+        if (request.payload != null && priorDoseIds.contains(request.payload)) {
+          await _plugin.cancel(request.id);
+        }
+      }
+    } on Object {
+      _logger.error('Unable to list pending reminders');
+    }
+    final doseIds = await _registry.doseIdsForMedication(medicationId);
+    for (final doseId in doseIds) {
+      final id = await _registry.idForDose(doseId);
+      if (id == null) continue;
+      await _plugin.cancel(id);
+      await _registry.releaseDose(doseId);
+    }
+  }
+
+  @override
+  Future<List<String>> trackedMedicationIds() => _registry.medicationIds();
+
+  @override
+  Future<void> cancelAllReminders() async {
+    try {
+      final pending = await _plugin.pendingNotificationRequests();
+      for (final request in pending) {
+        await _plugin.cancel(request.id);
+      }
+    } on Object {
+      _logger.error('Unable to cancel pending reminders; keeping alarm IDs tracked');
+      return;
+    }
+    for (final medicationId in List<String>.from(
+      await _registry.medicationIds(),
+    )) {
+      await _registry.releaseMedication(medicationId);
+    }
+  }
+
+  @override
+  Future<void> showImmediate({required String title, required String body}) async {
+    final id = await _registry.allocateImmediate();
+    final alarms = _alarms;
+    if (alarms != null) {
+      await alarms.show(id: id, title: title, body: body);
+      return;
+    }
+    await _plugin.show(
+      id,
       title,
       body,
       const NotificationDetails(
@@ -203,11 +351,47 @@ class LocalNotificationService implements NotificationService {
     );
   }
 
+  Future<void> _cancelPluginId(int id) {
+    final alarms = _alarms;
+    if (alarms != null) return alarms.cancel(id);
+    return _plugin.cancel(id);
+  }
+
+  Future<void> _zonedSchedule({
+    required int id,
+    required String title,
+    required String body,
+    required tz.TZDateTime when,
+    required NotificationDetails details,
+    required AndroidScheduleMode androidScheduleMode,
+    required String payload,
+  }) {
+    final alarms = _alarms;
+    if (alarms != null) {
+      return alarms.zonedSchedule(
+        id: id,
+        title: title,
+        body: body,
+        when: when,
+        details: details,
+        androidScheduleMode: androidScheduleMode,
+        payload: payload,
+      );
+    }
+    return _plugin.zonedSchedule(
+      id,
+      title,
+      body,
+      when,
+      details,
+      androidScheduleMode: androidScheduleMode,
+      payload: payload,
+    );
+  }
+
   String _body(Medication medication) {
     final food = medication.foodInstruction;
     final foodPart = (food == null || food.isEmpty) ? '' : ' $food.';
     return 'Take ${medication.doseLabel}.$foodPart';
   }
-
-  int _id(String doseId) => doseId.hashCode & 0x7fffffff;
 }

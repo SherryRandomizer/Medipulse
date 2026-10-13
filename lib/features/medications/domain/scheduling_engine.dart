@@ -57,6 +57,46 @@ class SchedulingEngine {
   String occurrenceKey(String medicationId, DateTime scheduledAt) =>
       _key(medicationId, scheduledAt);
 
+  tz.Location locationFor(String name) {
+    try {
+      return tz.getLocation(name);
+    } catch (_) {
+      return tz.local;
+    }
+  }
+
+  /// Whether [scheduledAt] is an occurrence of the medication's current clock
+  /// schedule. Ignores paused/archived so Home can still show valid history.
+  /// PRN has no clock times, so this is always false for [FrequencyType.asNeeded].
+  bool matchesCurrentSchedule({
+    required Medication medication,
+    required DateTime scheduledAt,
+    tz.Location? location,
+  }) {
+    if (medication.schedule.frequency == FrequencyType.asNeeded) {
+      return false;
+    }
+    final loc = location ?? tz.UTC;
+    final utc = scheduledAt.toUtc();
+    final local = tz.TZDateTime.from(utc, loc);
+    final from = local.subtract(const Duration(seconds: 1));
+    final until = local.add(const Duration(seconds: 1));
+    for (final occurrence in _occurrences(medication, from, until, loc)) {
+      if (_sameUtcMinute(occurrence, utc)) return true;
+    }
+    return false;
+  }
+
+  bool _sameUtcMinute(DateTime a, DateTime b) {
+    final au = a.toUtc();
+    final bu = b.toUtc();
+    return au.year == bu.year &&
+        au.month == bu.month &&
+        au.day == bu.day &&
+        au.hour == bu.hour &&
+        au.minute == bu.minute;
+  }
+
   Iterable<DateTime> _occurrences(
     Medication medication,
     DateTime from,

@@ -45,6 +45,13 @@ class MedicationCoordinator {
   final DoseLifecycle _lifecycle;
 
   Future<Medication> saveMedication(Medication medication) async {
+    return _saveMedication(medication, logCreatedEvent: true);
+  }
+
+  Future<Medication> _saveMedication(
+    Medication medication, {
+    required bool logCreatedEvent,
+  }) async {
     final name = medication.name.trim();
     if (name.isEmpty) {
       throw const ValidationFailure('Enter the medicine name.');
@@ -64,14 +71,40 @@ class MedicationCoordinator {
         }
       }
     }
-    final saved = medication.copyWith(name: name, updatedAt: clock.now().toUtc());
+    final saved = medication.copyWith(
+      name: name,
+      updatedAt: clock.now().toUtc(),
+    );
     await _medications.save(saved);
     await regenerateSchedule(saved);
-    await _analytics.logEvent('medication_created');
+    if (logCreatedEvent) {
+      await _analytics.logEvent('medication_created');
+    }
     return saved;
   }
 
+  Future<void> deleteMedication(Medication medication) async {
+    await _saveMedication(
+      medication.copyWith(
+        status: MedicationStatus.archived,
+        deletedAt: clock.now().toUtc(),
+      ),
+      logCreatedEvent: false,
+    );
+  }
+
   Future<void> regenerateSchedule(Medication medication) async {
+    // Capture the pending dose IDs before replacePending removes them. Older
+    // app versions scheduled alarms directly from dose IDs, so the current
+    // notification registry cannot identify those OS alarms by medication.
+    final previousDoseIds = (await _doses.pending(medication.userId))
+        .where((dose) => dose.medicationId == medication.id)
+        .map((dose) => dose.id)
+        .toSet();
+    await _notifications.cancelMedication(
+      medication.id,
+      priorDoseIds: previousDoseIds,
+    );
     final loc = _location(medication.timeZone);
     final generated = _engine.generateDoses(
       medication: medication,
@@ -79,21 +112,42 @@ class MedicationCoordinator {
       location: loc,
     );
     await _doses.replacePending(medication.id, generated);
-    await rescheduleNotifications(medication.userId);
+    if (medication.isPaused ||
+        medication.isArchived ||
+        medication.deletedAt != null) {
+      return;
+    }
+    for (final dose in generated) {
+      await _notifications.scheduleDoseReminder(
+        dose: dose,
+        medication: medication,
+      );
+    }
   }
 
   Future<void> rescheduleNotifications(String userId) async {
+    await _notifications.cancelAllReminders();
     final pending = await _doses.pending(userId);
-    final meds = {for (final m in await _medications.list(userId)) m.id: m};
+    final meds = {
+      for (final m in await _medications.list(userId, includeArchived: true))
+        m.id: m,
+    };
     for (final dose in pending) {
-      await _notifications.cancelDose(dose.id);
       final med = meds[dose.medicationId];
-      if (med == null || med.isPaused || med.isArchived) continue;
+      if (med == null ||
+          med.isPaused ||
+          med.isArchived ||
+          med.deletedAt != null) {
+        continue;
+      }
       await _notifications.scheduleDoseReminder(dose: dose, medication: med);
     }
   }
 
-  Future<void> markOverdueMissed(String userId, {String firstName = 'Someone'}) async {
+  Future<void> markOverdueMissed(
+    String userId, {
+    String firstName = 'Someone',
+  }) async {
     final pending = await _doses.pending(userId);
     for (final dose in pending) {
       final updated = _lifecycle.markMissedIfOverdue(dose);
@@ -110,7 +164,11 @@ class MedicationCoordinator {
     }
   }
 
-  Future<MedicationDose> actOnDose(MedicationDose dose, DoseStatus action, {Duration? snooze}) async {
+  Future<MedicationDose> actOnDose(
+    MedicationDose dose,
+    DoseStatus action, {
+    Duration? snooze,
+  }) async {
     late final MedicationDose updated;
     switch (action) {
       case DoseStatus.taken:
@@ -120,7 +178,10 @@ class MedicationCoordinator {
         updated = _lifecycle.markSkipped(dose);
         await _analytics.logEvent('medication_skipped');
       case DoseStatus.snoozed:
-        updated = _lifecycle.snooze(dose, snooze ?? const Duration(minutes: 10));
+        updated = _lifecycle.snooze(
+          dose,
+          snooze ?? const Duration(minutes: 10),
+        );
       default:
         throw const ValidationFailure('That action is not available.');
     }
@@ -128,12 +189,18 @@ class MedicationCoordinator {
     await _notifications.cancelDose(dose.id);
     if (updated.status == DoseStatus.taken) {
       await _consumeSupply(dose.medicationId);
-      await _healthSync?.onDoseTaken(userId: dose.userId, takenAt: updated.actedAt ?? clock.now().toUtc());
+      await _healthSync?.onDoseTaken(
+        userId: dose.userId,
+        takenAt: updated.actedAt ?? clock.now().toUtc(),
+      );
     }
     if (updated.status == DoseStatus.snoozed) {
       final med = await _medications.getById(dose.medicationId);
       if (med != null) {
-        await _notifications.scheduleDoseReminder(dose: updated, medication: med);
+        await _notifications.scheduleDoseReminder(
+          dose: updated,
+          medication: med,
+        );
       }
     }
     return updated;
@@ -148,7 +215,8 @@ class MedicationCoordinator {
     if (_refill.estimate(updated).warning) {
       await _notifications.showImmediate(
         title: 'Supply may run out soon',
-        body: 'Your medication may run out soon. This estimate is not medical advice.',
+        body:
+            'Your medication may run out soon. This estimate is not medical advice.',
       );
     }
   }

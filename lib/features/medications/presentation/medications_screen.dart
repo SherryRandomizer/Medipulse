@@ -156,9 +156,8 @@ class MedicationDetailScreen extends ConsumerWidget {
                     confirmLabel: 'Delete',
                   );
                   if (!ok) return;
-                  await ref.read(medicationRepositoryProvider).save(
-                    med.copyWith(status: MedicationStatus.archived, deletedAt: DateTime.now().toUtc()),
-                  );
+                  await ref.read(medicationCoordinatorProvider).deleteMedication(med);
+                  ref.invalidate(homeSnapshotProvider);
                   if (context.mounted) context.go('/medications');
                 },
                 child: const Text('Delete'),
