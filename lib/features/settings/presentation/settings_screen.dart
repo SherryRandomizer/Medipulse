@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:medipulse/core/config/app_config.dart';
 import 'package:medipulse/core/constants/legal_copy.dart';
 import 'package:medipulse/core/di/app_controllers.dart';
@@ -66,17 +67,32 @@ class SettingsScreen extends ConsumerWidget {
           ),
           ListTile(
             title: const Text('Export data'),
+            subtitle: const Text('Share a copy of your medication and dose history.'),
             onTap: () async {
               final current = user;
               if (current == null) return;
-              final json = await ref.read(localDatabaseProvider).exportUserJson(current.id);
-              final dir = await getApplicationDocumentsDirectory();
-              final file = File('${dir.path}/medipulse-export.json');
-              await file.writeAsString(json);
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Exported to ${file.path}')),
+              final confirmed = await ConfirmationDialog.show(
+                context,
+                title: 'Export personal data?',
+                message: 'The file contains your profile, medications, and dose history. Choose a trusted destination when sharing it.',
+                confirmLabel: 'Continue',
+              );
+              if (!confirmed || !context.mounted) return;
+              try {
+                final json = await ref.read(localDatabaseProvider).exportUserJson(current.id);
+                final dir = await getTemporaryDirectory();
+                final timestamp = DateTime.now().toUtc().toIso8601String().replaceAll(':', '-');
+                final file = File('${dir.path}/medipulse-export-$timestamp.json');
+                await file.writeAsString(json, flush: true);
+                await SharePlus.instance.share(
+                  ShareParams(files: [XFile(file.path, mimeType: 'application/json')]),
                 );
+              } catch (_) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Could not create or share the data export. Please try again.')),
+                  );
+                }
               }
             },
           ),
@@ -516,4 +532,3 @@ class LegalScreen extends StatelessWidget {
     );
   }
 }
-
