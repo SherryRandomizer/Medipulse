@@ -78,20 +78,33 @@ class SettingsScreen extends ConsumerWidget {
                 confirmLabel: 'Continue',
               );
               if (!confirmed || !context.mounted) return;
+              File? exportFile;
               try {
                 final json = await ref.read(localDatabaseProvider).exportUserJson(current.id);
                 final dir = await getTemporaryDirectory();
                 final timestamp = DateTime.now().toUtc().toIso8601String().replaceAll(':', '-');
                 final file = File('${dir.path}/medipulse-export-$timestamp.json');
+                exportFile = file;
                 await file.writeAsString(json, flush: true);
                 await SharePlus.instance.share(
                   ShareParams(files: [XFile(file.path, mimeType: 'application/json')]),
                 );
-              } catch (_) {
+                            } catch (_) {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Could not create or share the data export. Please try again.')),
                   );
+                }
+              } finally {
+                final file = exportFile;
+                if (file != null) {
+                  try {
+                    if (await file.exists()) {
+                      await file.delete();
+                    }
+                  } catch (_) { 
+                    // Temporary export cleanup is best effort.
+                  }
                 }
               }
             },
