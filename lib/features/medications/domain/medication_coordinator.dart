@@ -125,6 +125,46 @@ class MedicationCoordinator {
     }
   }
 
+  /// Additively extends eligible medication schedules through the scheduling
+  /// horizon. Existing doses are never deleted or modified.
+  Future<void> extendSchedules(
+    String userId, {
+    bool scheduleReminders = true,
+  }) async {
+    final now = clock.now().toUtc();
+    final until = now.add(Duration(days: _engine.horizonDays));
+    final meds = await _medications.list(userId, includeArchived: true);
+
+    for (final medication in meds) {
+      if (medication.isPaused ||
+          medication.isArchived ||
+          medication.deletedAt != null ||
+          medication.schedule.frequency == FrequencyType.asNeeded) {
+        continue;
+      }
+
+      final candidates = _engine.generateDoses(
+        medication: medication,
+        from: now.subtract(const Duration(minutes: 1)),
+        until: until,
+        location: _location(medication.timeZone),
+      );
+
+      if (candidates.isEmpty) continue;
+
+      final inserted = await _doses.insertMissing(candidates);
+
+      if (scheduleReminders) {
+        for (final dose in inserted) {
+          await _notifications.scheduleDoseReminder(
+            dose: dose,
+            medication: medication,
+          );
+        }
+      }
+    }
+  }
+
   Future<void> rescheduleNotifications(String userId) async {
     await _notifications.cancelAllReminders();
     final pending = await _doses.pending(userId);

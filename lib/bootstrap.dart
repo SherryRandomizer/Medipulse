@@ -31,14 +31,23 @@ Future<ProviderContainer> bootstrap() async {
   await _applyPendingDoseActions(container);
 
   await container.read(analyticsServiceProvider).logEvent('app_open');
+
   final user = await container.read(authServiceProvider).currentUser();
   if (user != null) {
-    await container.read(medicationCoordinatorProvider).markOverdueMissed(
-      user.id,
-      firstName: user.greetingName,
-    );
-    await container.read(medicationCoordinatorProvider).rescheduleNotifications(user.id);
+    final coordinator = container.read(medicationCoordinatorProvider);
+
+    await coordinator.markOverdueMissed(user.id, firstName: user.greetingName);
+
+    try {
+      await coordinator.extendSchedules(user.id, scheduleReminders: false);
+    } catch (error, stackTrace) {
+      debugPrint('Failed to extend medication schedules: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    }
+
+    await coordinator.rescheduleNotifications(user.id);
   }
+
   return container;
 }
 
@@ -58,7 +67,11 @@ Future<void> _applyPendingDoseActions(ProviderContainer container) async {
   await _applyDoseAction(container, pending.actionId, pending.doseId);
 }
 
-Future<void> _applyDoseAction(ProviderContainer container, String action, String doseId) async {
+Future<void> _applyDoseAction(
+  ProviderContainer container,
+  String action,
+  String doseId,
+) async {
   final dose = await container.read(doseRepositoryProvider).getById(doseId);
   if (dose == null) return;
   final mapped = switch (action) {

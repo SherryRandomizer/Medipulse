@@ -4,10 +4,7 @@ import 'package:uuid/uuid.dart';
 import 'package:medipulse/shared/models/entities.dart';
 
 class SchedulingEngine {
-  SchedulingEngine({
-    this.uuid = const Uuid(),
-    this.horizonDays = 31,
-  });
+  SchedulingEngine({this.uuid = const Uuid(), this.horizonDays = 31});
 
   final Uuid uuid;
   final int horizonDays;
@@ -18,8 +15,12 @@ class SchedulingEngine {
     DateTime? until,
     tz.Location? location,
   }) {
-    if (medication.status != MedicationStatus.active) return const [];
-    if (medication.schedule.frequency == FrequencyType.asNeeded) return const [];
+    if (medication.status != MedicationStatus.active) {
+      return const [];
+    }
+    if (medication.schedule.frequency == FrequencyType.asNeeded) {
+      return const [];
+    }
 
     final loc = location ?? tz.UTC;
     final start = _max(from, medication.startDate);
@@ -50,8 +51,7 @@ class SchedulingEngine {
         createdAt: now,
         updatedAt: now,
       );
-    }).toList()
-      ..sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
+    }).toList()..sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
   }
 
   String occurrenceKey(String medicationId, DateTime scheduledAt) =>
@@ -122,19 +122,45 @@ class SchedulingEngine {
   ) {
     final hours = medication.schedule.intervalHours ?? 0;
     if (hours <= 0) return const [];
+
     final times = _effectiveTimes(medication.schedule);
     final firstMinutes = times.isEmpty ? 8 * 60 : times.first;
-    var cursor = _atMinutes(loc, medication.startDate, firstMinutes);
+
+    final originalStart = _atMinutes(loc, medication.startDate, firstMinutes);
+
+    // Preserve the original cadence, but jump close to the requested window.
+    final interval = Duration(hours: hours);
+    var cursor = originalStart;
+
+    if (from.isAfter(originalStart)) {
+      final elapsed = from.difference(originalStart);
+      final elapsedIntervals =
+          elapsed.inMicroseconds ~/ interval.inMicroseconds;
+      cursor = originalStart.add(
+        Duration(microseconds: elapsedIntervals * interval.inMicroseconds),
+      );
+
+      // Move forward to the first occurrence at or after `from`.
+      if (cursor.isBefore(from)) {
+        cursor = cursor.add(interval);
+      }
+    }
+
     final results = <DateTime>[];
     var guard = 0;
-    while (cursor.isBefore(until) || cursor.isAtSameMomentAs(until)) {
-      if (!cursor.isBefore(from) && _withinMedicationWindow(medication, cursor, loc)) {
+
+    while (!cursor.isAfter(until)) {
+      if (_withinMedicationWindow(medication, cursor, loc)) {
         results.add(cursor);
       }
-      cursor = cursor.add(Duration(hours: hours));
+
+      cursor = cursor.add(interval);
       guard++;
+
+      // Safety limit for unusually large requested ranges.
       if (guard > 4000) break;
     }
+
     return results;
   }
 

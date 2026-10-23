@@ -98,6 +98,23 @@ class _MemoryDoses implements DoseRepository {
   }
 
   @override
+  Future<List<MedicationDose>> insertMissing(List<MedicationDose> doses) async {
+    final inserted = <MedicationDose>[];
+    for (final dose in doses) {
+      final exists = items.any(
+        (d) =>
+            d.id == dose.id ||
+            (d.medicationId == dose.medicationId &&
+                d.scheduledAt.isAtSameMomentAs(dose.scheduledAt)),
+      );
+      if (exists) continue;
+      items.add(dose);
+      inserted.add(dose);
+    }
+    return inserted;
+  }
+
+  @override
   Future<void> save(MedicationDose dose) async {
     items.removeWhere((d) => d.id == dose.id);
     items.add(dose);
@@ -134,6 +151,7 @@ class _SilentAnalytics implements AnalyticsService {
 /// In-memory stand-in for OS reminder alarms.
 class RecordingNotifications implements NotificationService {
   final scheduled = <String, String>{};
+
   /// Models AlarmManager entries keyed by the legacy `doseId.hashCode` integer.
   final legacyScheduledPayloads = <int, String>{};
   final cancelledMedicationIds = <String>[];
@@ -152,7 +170,9 @@ class RecordingNotifications implements NotificationService {
   Future<void> cancelDose(String doseId) async {
     scheduled.remove(doseId);
     cancelledPluginIds.add(LocalNotificationService.legacyAlarmId(doseId));
-    legacyScheduledPayloads.remove(LocalNotificationService.legacyAlarmId(doseId));
+    legacyScheduledPayloads.remove(
+      LocalNotificationService.legacyAlarmId(doseId),
+    );
   }
 
   @override
@@ -280,7 +300,9 @@ void main() {
         final betaDoseId = betaDoseIds.first;
         expect(firstIds, isNotEmpty);
         expect(notifications.cancelledMedicationIds, contains('alpha'));
-        final alphaLegacyId = LocalNotificationService.legacyAlarmId(firstIds.first);
+        final alphaLegacyId = LocalNotificationService.legacyAlarmId(
+          firstIds.first,
+        );
         final betaLegacyId = LocalNotificationService.legacyAlarmId(betaDoseId);
         notifications.legacyScheduledPayloads[alphaLegacyId] = firstIds.first;
         notifications.legacyScheduledPayloads[betaLegacyId] = betaDoseId;
@@ -299,7 +321,10 @@ void main() {
         for (final oldId in firstIds) {
           expect(notifications.scheduled.containsKey(oldId), isFalse);
         }
-        expect(notifications.legacyScheduledPayloads.containsKey(alphaLegacyId), isFalse);
+        expect(
+          notifications.legacyScheduledPayloads.containsKey(alphaLegacyId),
+          isFalse,
+        );
         expect(notifications.legacyScheduledPayloads[betaLegacyId], betaDoseId);
         expect(notifications.doseIdsFor('beta'), betaDoseIds);
         expect(notifications.doseIdsFor('alpha').length, firstIds.length);
@@ -402,39 +427,58 @@ void main() {
     },
   );
 
-  test('edit cancels the legacy hashCode alarm id before scheduling replacements', () async {
-    await atSeven(() async {
-      await coordinator.saveMedication(_med(id: 'alpha'));
-      await coordinator.saveMedication(_med(id: 'beta'));
-      final alphaIds = notifications.doseIdsFor('alpha').toList();
-      final betaIds = notifications.doseIdsFor('beta');
-      final alphaLegacyIds = {
-        for (final id in alphaIds) LocalNotificationService.legacyAlarmId(id),
-      };
-      final betaLegacyIds = {
-        for (final id in betaIds) LocalNotificationService.legacyAlarmId(id),
-      };
-      for (final id in alphaIds) {
-        notifications.legacyScheduledPayloads[LocalNotificationService.legacyAlarmId(id)] = id;
-      }
-      for (final id in betaIds) {
-        notifications.legacyScheduledPayloads[LocalNotificationService.legacyAlarmId(id)] = id;
-      }
+  test(
+    'edit cancels the legacy hashCode alarm id before scheduling replacements',
+    () async {
+      await atSeven(() async {
+        await coordinator.saveMedication(_med(id: 'alpha'));
+        await coordinator.saveMedication(_med(id: 'beta'));
+        final alphaIds = notifications.doseIdsFor('alpha').toList();
+        final betaIds = notifications.doseIdsFor('beta');
+        final alphaLegacyIds = {
+          for (final id in alphaIds) LocalNotificationService.legacyAlarmId(id),
+        };
+        final betaLegacyIds = {
+          for (final id in betaIds) LocalNotificationService.legacyAlarmId(id),
+        };
+        for (final id in alphaIds) {
+          notifications
+                  .legacyScheduledPayloads[LocalNotificationService.legacyAlarmId(
+                id,
+              )] =
+              id;
+        }
+        for (final id in betaIds) {
+          notifications
+                  .legacyScheduledPayloads[LocalNotificationService.legacyAlarmId(
+                id,
+              )] =
+              id;
+        }
 
-      await coordinator.saveMedication(_med(id: 'alpha', times: const [12 * 60 + 45]));
+        await coordinator.saveMedication(
+          _med(id: 'alpha', times: const [12 * 60 + 45]),
+        );
 
-      for (final legacyId in alphaLegacyIds) {
-        expect(notifications.cancelledPluginIds, contains(legacyId));
-        expect(notifications.legacyScheduledPayloads.containsKey(legacyId), isFalse);
-      }
-      for (final legacyId in betaLegacyIds) {
-        expect(notifications.cancelledPluginIds, isNot(contains(legacyId)));
-        expect(notifications.legacyScheduledPayloads.containsKey(legacyId), isTrue);
-      }
-      expect(notifications.doseIdsFor('beta'), betaIds);
-      expect(notifications.doseIdsFor('alpha').length, alphaIds.length);
-    });
-  });
+        for (final legacyId in alphaLegacyIds) {
+          expect(notifications.cancelledPluginIds, contains(legacyId));
+          expect(
+            notifications.legacyScheduledPayloads.containsKey(legacyId),
+            isFalse,
+          );
+        }
+        for (final legacyId in betaLegacyIds) {
+          expect(notifications.cancelledPluginIds, isNot(contains(legacyId)));
+          expect(
+            notifications.legacyScheduledPayloads.containsKey(legacyId),
+            isTrue,
+          );
+        }
+        expect(notifications.doseIdsFor('beta'), betaIds);
+        expect(notifications.doseIdsFor('alpha').length, alphaIds.length);
+      });
+    },
+  );
 
   test('repeated save does not duplicate reminders', () async {
     await atSeven(() async {
@@ -451,6 +495,87 @@ void main() {
       );
     });
   });
+
+  test(
+    'extendSchedules adds missing future doses and leaves existing state untouched',
+    () async {
+      await atSeven(() async {
+        await coordinator.saveMedication(
+          _med(id: 'alpha', times: const [8 * 60, 20 * 60]),
+        );
+        await coordinator.saveMedication(_med(id: 'beta'));
+
+        List<MedicationDose> dosesFor(String medicationId) =>
+            doses.items.where((d) => d.medicationId == medicationId).toList()
+              ..sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
+
+        // Horizon is 2 days from the fixed clock, so alpha starts with 4 doses.
+        final full = dosesFor('alpha');
+        expect(full, hasLength(4));
+        final kept = full.take(2).toList();
+        final missing = full.skip(2).toList();
+
+        // Simulate a gap: the later doses (and their reminders) are absent.
+        for (final dose in missing) {
+          doses.items.removeWhere((d) => d.id == dose.id);
+          notifications.scheduled.remove(dose.id);
+        }
+        expect(dosesFor('alpha'), hasLength(2));
+
+        final keptTimes = {for (final d in kept) d.id: d.scheduledAt};
+        final betaTimes = {
+          for (final d in dosesFor('beta')) d.id: d.scheduledAt,
+        };
+        final betaReminders = notifications.doseIdsFor('beta');
+        final betaCancels = notifications.cancelledMedicationIds
+            .where((id) => id == 'beta')
+            .length;
+        final callsBefore = notifications.scheduleCalls;
+
+        await coordinator.extendSchedules('user-1');
+
+        final after = dosesFor('alpha');
+        final added = after.where((d) => !keptTimes.containsKey(d.id)).toList();
+
+        // 1. Missing future doses were added.
+        expect(
+          added.map((d) => d.scheduledAt).toList(),
+          missing.map((d) => d.scheduledAt).toList(),
+        );
+
+        // 2. Existing dose IDs and scheduled timestamps are preserved.
+        for (final entry in keptTimes.entries) {
+          final match = after.where((d) => d.id == entry.key);
+          expect(match, hasLength(1));
+          expect(match.single.scheduledAt, entry.value);
+        }
+
+        // 3. No duplicate scheduled timestamps for the medication.
+        final stamps = after.map((d) => d.scheduledAt).toList();
+        expect(stamps, hasLength(4));
+        expect(stamps.toSet(), hasLength(stamps.length));
+
+        // 4. Another medication is unchanged.
+        expect({
+          for (final d in dosesFor('beta')) d.id: d.scheduledAt,
+        }, betaTimes);
+        expect(notifications.doseIdsFor('beta'), betaReminders);
+        expect(
+          notifications.cancelledMedicationIds
+              .where((id) => id == 'beta')
+              .length,
+          betaCancels,
+        );
+
+        // 5. Only the newly inserted doses were scheduled; all have reminders.
+        expect(notifications.scheduleCalls - callsBefore, added.length);
+        expect(
+          notifications.doseIdsFor('alpha'),
+          after.map((d) => d.id).toSet(),
+        );
+      });
+    },
+  );
 
   test(
     'app-start reschedule drops leftover alarms then restores one per pending dose',
@@ -527,48 +652,51 @@ void main() {
     expect(id > ReminderAlarmRegistry.maxDoseNotificationId, isTrue);
   });
 
-  test('registry drops invalid persisted ids and keeps the first of a duplicate', () async {
-    final registry = ReminderAlarmRegistry.memory({
-      'nextId': 99,
-      'byMedication': {
-        'alpha': {
-          'keep': 4,
-          'fromDouble': 8.0,
-          'fraction': 4.5,
-          'zero': 0,
-          'negative': -3,
-          'tooBig': ReminderAlarmRegistry.maxDoseNotificationId + 1,
-          'immediate': ReminderAlarmRegistry.immediateIdBase,
-          'junk': 'nope',
+  test(
+    'registry drops invalid persisted ids and keeps the first of a duplicate',
+    () async {
+      final registry = ReminderAlarmRegistry.memory({
+        'nextId': 99,
+        'byMedication': {
+          'alpha': {
+            'keep': 4,
+            'fromDouble': 8.0,
+            'fraction': 4.5,
+            'zero': 0,
+            'negative': -3,
+            'tooBig': ReminderAlarmRegistry.maxDoseNotificationId + 1,
+            'immediate': ReminderAlarmRegistry.immediateIdBase,
+            'junk': 'nope',
+          },
+          'beta': {'dup': 4, 'ok': 7},
+          'broken': 'not-a-map',
         },
-        'beta': {
-          'dup': 4,
-          'ok': 7,
-        },
-        'broken': 'not-a-map',
-      },
-    });
+      });
 
-    expect(await registry.idForDose('keep'), 4);
-    expect(await registry.idForDose('fromDouble'), 8);
-    expect(await registry.idForDose('fraction'), isNull);
-    expect(await registry.idForDose('dup'), isNull);
-    expect(await registry.idForDose('ok'), 7);
-    expect(await registry.idForDose('zero'), isNull);
-    expect(await registry.idForDose('negative'), isNull);
-    expect(await registry.idForDose('tooBig'), isNull);
-    expect(await registry.idForDose('immediate'), isNull);
-    expect(await registry.idForDose('junk'), isNull);
-    expect(await registry.idsForMedication('broken'), isEmpty);
+      expect(await registry.idForDose('keep'), 4);
+      expect(await registry.idForDose('fromDouble'), 8);
+      expect(await registry.idForDose('fraction'), isNull);
+      expect(await registry.idForDose('dup'), isNull);
+      expect(await registry.idForDose('ok'), 7);
+      expect(await registry.idForDose('zero'), isNull);
+      expect(await registry.idForDose('negative'), isNull);
+      expect(await registry.idForDose('tooBig'), isNull);
+      expect(await registry.idForDose('immediate'), isNull);
+      expect(await registry.idForDose('junk'), isNull);
+      expect(await registry.idsForMedication('broken'), isEmpty);
 
-    final reused = await registry.allocate(medicationId: 'beta', doseId: 'dup');
-    expect(reused, isNot(4));
-    expect(reused, isNot(8));
-    expect(reused, isNot(7));
-    expect(reused >= 1, isTrue);
-    expect(reused <= ReminderAlarmRegistry.maxDoseNotificationId, isTrue);
-    expect({4, 8, 7, reused}.length, 4);
-  });
+      final reused = await registry.allocate(
+        medicationId: 'beta',
+        doseId: 'dup',
+      );
+      expect(reused, isNot(4));
+      expect(reused, isNot(8));
+      expect(reused, isNot(7));
+      expect(reused >= 1, isTrue);
+      expect(reused <= ReminderAlarmRegistry.maxDoseNotificationId, isTrue);
+      expect({4, 8, 7, reused}.length, 4);
+    },
+  );
 
   test('registry ignores malformed byMedication payloads', () async {
     final registry = ReminderAlarmRegistry.memory({
@@ -596,141 +724,179 @@ void main() {
     expect({first, second, doseId}.length, 3);
   });
 
-  test('scheduleDoseReminder releases registry id when exact and inexact fail', () async {
-    final registry = ReminderAlarmRegistry.memory();
-    final alarms = _RecordingAlarms(throwOnEverySchedule: true);
-    final logger = _RecordingLogger();
-    final service = LocalNotificationService(
-      registry: registry,
-      logger: logger,
-      alarms: alarms,
-    );
-    final med = _med(id: 'alpha');
-    final when = DateTime.now().toUtc().add(const Duration(hours: 2));
-    final dose = MedicationDose(
-      id: 'dose-fail',
-      medicationId: med.id,
-      userId: med.userId,
-      scheduledAt: when,
-      remindAt: when,
-      status: DoseStatus.pending,
-      snoozeCount: 0,
-      createdAt: when,
-      updatedAt: when,
-    );
+  test(
+    'scheduleDoseReminder releases registry id when exact and inexact fail',
+    () async {
+      final registry = ReminderAlarmRegistry.memory();
+      final alarms = _RecordingAlarms(throwOnEverySchedule: true);
+      final logger = _RecordingLogger();
+      final service = LocalNotificationService(
+        registry: registry,
+        logger: logger,
+        alarms: alarms,
+      );
+      final med = _med(id: 'alpha');
+      final when = DateTime.now().toUtc().add(const Duration(hours: 2));
+      final dose = MedicationDose(
+        id: 'dose-fail',
+        medicationId: med.id,
+        userId: med.userId,
+        scheduledAt: when,
+        remindAt: when,
+        status: DoseStatus.pending,
+        snoozeCount: 0,
+        createdAt: when,
+        updatedAt: when,
+      );
 
-    await expectLater(
-      service.scheduleDoseReminder(dose: dose, medication: med),
-      throwsA(isA<StateError>()),
-    );
-    expect(await registry.idForDose(dose.id), isNull);
-    expect(alarms.cancelled, isNotEmpty);
-    expect(alarms.modes, [
-      AndroidScheduleMode.exactAllowWhileIdle,
-      AndroidScheduleMode.inexactAllowWhileIdle,
-    ]);
-    expect(logger.errors, isNotEmpty);
+      await expectLater(
+        service.scheduleDoseReminder(dose: dose, medication: med),
+        throwsA(isA<StateError>()),
+      );
+      expect(await registry.idForDose(dose.id), isNull);
+      expect(alarms.cancelled, isNotEmpty);
+      expect(alarms.modes, [
+        AndroidScheduleMode.exactAllowWhileIdle,
+        AndroidScheduleMode.inexactAllowWhileIdle,
+      ]);
+      expect(logger.errors, isNotEmpty);
 
-    final retry = await registry.allocate(medicationId: med.id, doseId: dose.id);
-    expect(retry >= 1, isTrue);
-    expect(retry <= ReminderAlarmRegistry.maxDoseNotificationId, isTrue);
-  });
+      final retry = await registry.allocate(
+        medicationId: med.id,
+        doseId: dose.id,
+      );
+      expect(retry >= 1, isTrue);
+      expect(retry <= ReminderAlarmRegistry.maxDoseNotificationId, isTrue);
+    },
+  );
 
-  test('scheduleDoseReminder keeps registry id when inexact fallback works', () async {
-    final registry = ReminderAlarmRegistry.memory();
-    final alarms = _RecordingAlarms(throwOnExactOnly: true);
-    final service = LocalNotificationService(registry: registry, alarms: alarms);
-    final med = _med(id: 'alpha');
-    final when = DateTime.now().toUtc().add(const Duration(hours: 2));
-    final dose = MedicationDose(
-      id: 'dose-ok',
-      medicationId: med.id,
-      userId: med.userId,
-      scheduledAt: when,
-      remindAt: when,
-      status: DoseStatus.pending,
-      snoozeCount: 0,
-      createdAt: when,
-      updatedAt: when,
-    );
+  test(
+    'scheduleDoseReminder keeps registry id when inexact fallback works',
+    () async {
+      final registry = ReminderAlarmRegistry.memory();
+      final alarms = _RecordingAlarms(throwOnExactOnly: true);
+      final service = LocalNotificationService(
+        registry: registry,
+        alarms: alarms,
+      );
+      final med = _med(id: 'alpha');
+      final when = DateTime.now().toUtc().add(const Duration(hours: 2));
+      final dose = MedicationDose(
+        id: 'dose-ok',
+        medicationId: med.id,
+        userId: med.userId,
+        scheduledAt: when,
+        remindAt: when,
+        status: DoseStatus.pending,
+        snoozeCount: 0,
+        createdAt: when,
+        updatedAt: when,
+      );
 
-    await service.scheduleDoseReminder(dose: dose, medication: med);
-    expect(await registry.idForDose(dose.id), isNotNull);
-    expect(alarms.modes.last, AndroidScheduleMode.inexactAllowWhileIdle);
-  });
+      await service.scheduleDoseReminder(dose: dose, medication: med);
+      expect(await registry.idForDose(dose.id), isNotNull);
+      expect(alarms.modes.last, AndroidScheduleMode.inexactAllowWhileIdle);
+    },
+  );
 
-  test('scheduleDoseReminder releases registry id even if cleanup cancel throws', () async {
-    final registry = ReminderAlarmRegistry.memory();
-    final alarms = _RecordingAlarms(
-      throwOnEverySchedule: true,
-      throwOnCleanupCancel: true,
-    );
-    final logger = _RecordingLogger();
-    final service = LocalNotificationService(
-      registry: registry,
-      logger: logger,
-      alarms: alarms,
-    );
-    final med = _med(id: 'alpha');
-    final when = DateTime.now().toUtc().add(const Duration(hours: 2));
-    final dose = MedicationDose(
-      id: 'dose-cancel-fail',
-      medicationId: med.id,
-      userId: med.userId,
-      scheduledAt: when,
-      remindAt: when,
-      status: DoseStatus.pending,
-      snoozeCount: 0,
-      createdAt: when,
-      updatedAt: when,
-    );
+  test(
+    'scheduleDoseReminder releases registry id even if cleanup cancel throws',
+    () async {
+      final registry = ReminderAlarmRegistry.memory();
+      final alarms = _RecordingAlarms(
+        throwOnEverySchedule: true,
+        throwOnCleanupCancel: true,
+      );
+      final logger = _RecordingLogger();
+      final service = LocalNotificationService(
+        registry: registry,
+        logger: logger,
+        alarms: alarms,
+      );
+      final med = _med(id: 'alpha');
+      final when = DateTime.now().toUtc().add(const Duration(hours: 2));
+      final dose = MedicationDose(
+        id: 'dose-cancel-fail',
+        medicationId: med.id,
+        userId: med.userId,
+        scheduledAt: when,
+        remindAt: when,
+        status: DoseStatus.pending,
+        snoozeCount: 0,
+        createdAt: when,
+        updatedAt: when,
+      );
 
-    await expectLater(
-      service.scheduleDoseReminder(dose: dose, medication: med),
-      throwsA(isA<StateError>()),
-    );
-    expect(await registry.idForDose(dose.id), isNull);
-    expect(logger.errors, contains('Unable to cancel failed reminder'));
-  });
+      await expectLater(
+        service.scheduleDoseReminder(dose: dose, medication: med),
+        throwsA(isA<StateError>()),
+      );
+      expect(await registry.idForDose(dose.id), isNull);
+      expect(logger.errors, contains('Unable to cancel failed reminder'));
+    },
+  );
 
-  test('cancelDose releases registry id even if registry cancel throws', () async {
-    final registry = ReminderAlarmRegistry.memory();
-    final allocated = await registry.allocate(medicationId: 'alpha', doseId: 'dose-1');
-    expect(await registry.idForDose('dose-1'), allocated);
+  test(
+    'cancelDose releases registry id even if registry cancel throws',
+    () async {
+      final registry = ReminderAlarmRegistry.memory();
+      final allocated = await registry.allocate(
+        medicationId: 'alpha',
+        doseId: 'dose-1',
+      );
+      expect(await registry.idForDose('dose-1'), allocated);
 
-    final alarms = _RecordingAlarms(throwOnCleanupCancel: true);
-    final logger = _RecordingLogger();
-    final service = LocalNotificationService(
-      registry: registry,
-      logger: logger,
-      alarms: alarms,
-    );
+      final alarms = _RecordingAlarms(throwOnCleanupCancel: true);
+      final logger = _RecordingLogger();
+      final service = LocalNotificationService(
+        registry: registry,
+        logger: logger,
+        alarms: alarms,
+      );
 
-    await expectLater(
-      service.cancelDose('dose-1'),
-      throwsA(isA<StateError>()),
-    );
-    expect(await registry.idForDose('dose-1'), isNull);
-    expect(logger.errors, contains('Unable to cancel reminder'));
-    expect(alarms.cancelled, contains(allocated));
-  });
+      await expectLater(
+        service.cancelDose('dose-1'),
+        throwsA(isA<StateError>()),
+      );
+      expect(await registry.idForDose('dose-1'), isNull);
+      expect(logger.errors, contains('Unable to cancel reminder'));
+      expect(alarms.cancelled, contains(allocated));
+    },
+  );
 
-  test('showImmediate uses a unique id for each call with the same title', () async {
-    final registry = ReminderAlarmRegistry.memory();
-    final alarms = _RecordingAlarms();
-    final service = LocalNotificationService(registry: registry, alarms: alarms);
+  test(
+    'showImmediate uses a unique id for each call with the same title',
+    () async {
+      final registry = ReminderAlarmRegistry.memory();
+      final alarms = _RecordingAlarms();
+      final service = LocalNotificationService(
+        registry: registry,
+        alarms: alarms,
+      );
 
-    await service.showImmediate(title: 'Supply may run out soon', body: 'First');
-    await service.showImmediate(title: 'Supply may run out soon', body: 'Second');
+      await service.showImmediate(
+        title: 'Supply may run out soon',
+        body: 'First',
+      );
+      await service.showImmediate(
+        title: 'Supply may run out soon',
+        body: 'Second',
+      );
 
-    expect(alarms.shownIds, hasLength(2));
-    expect(alarms.shownIds[0], isNot(alarms.shownIds[1]));
-    expect(alarms.shownTitles, ['Supply may run out soon', 'Supply may run out soon']);
-    expect(
-      alarms.shownIds.every((id) => id > ReminderAlarmRegistry.maxDoseNotificationId),
-      isTrue,
-    );
-  });
+      expect(alarms.shownIds, hasLength(2));
+      expect(alarms.shownIds[0], isNot(alarms.shownIds[1]));
+      expect(alarms.shownTitles, [
+        'Supply may run out soon',
+        'Supply may run out soon',
+      ]);
+      expect(
+        alarms.shownIds.every(
+          (id) => id > ReminderAlarmRegistry.maxDoseNotificationId,
+        ),
+        isTrue,
+      );
+    },
+  );
 }
 
 class _RecordingLogger extends AppLogger {

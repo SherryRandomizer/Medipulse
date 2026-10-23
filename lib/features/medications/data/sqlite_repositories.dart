@@ -31,6 +31,10 @@ class SqliteDoseRepository implements DoseRepository {
       _db.replacePendingDoses(medicationId, doses);
 
   @override
+  Future<List<MedicationDose>> insertMissing(List<MedicationDose> doses) =>
+      _db.insertMissingDoses(doses);
+
+  @override
   Future<void> save(MedicationDose dose) => _db.upsertDose(dose);
 
   @override

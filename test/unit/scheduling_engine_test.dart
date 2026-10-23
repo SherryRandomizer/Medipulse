@@ -60,7 +60,9 @@ void main() {
         location: utc,
       );
     });
-    final keys = doses.map((d) => '${d.medicationId}|${d.scheduledAt.toIso8601String()}').toSet();
+    final keys = doses
+        .map((d) => '${d.medicationId}|${d.scheduledAt.toIso8601String()}')
+        .toSet();
     expect(keys.length, doses.length);
     expect(doses.length, 3);
   });
@@ -98,7 +100,44 @@ void main() {
       location: utc,
     );
     expect(doses.length, greaterThanOrEqualTo(3));
-    expect(doses[1].scheduledAt.difference(doses[0].scheduledAt), const Duration(hours: 8));
+    expect(
+      doses[1].scheduledAt.difference(doses[0].scheduledAt),
+      const Duration(hours: 8),
+    );
+  });
+
+  test('old hourly medication generates doses in the requested window', () {
+    final start = DateTime.utc(2025, 1, 1);
+    final from = DateTime.utc(2026, 10, 20);
+    final until = DateTime.utc(2026, 10, 22);
+
+    final med = _med(
+      frequency: FrequencyType.everyXHours,
+      start: start,
+      times: const [8 * 60],
+      intervalHours: 1,
+    );
+
+    final doses = SchedulingEngine(
+      horizonDays: 31,
+    ).generateDoses(medication: med, from: from, until: until, location: utc);
+
+    expect(doses, isNotEmpty);
+    expect(
+      doses.every(
+        (dose) =>
+            !dose.scheduledAt.isBefore(from) &&
+            !dose.scheduledAt.isAfter(until),
+      ),
+      isTrue,
+    );
+
+    for (var i = 1; i < doses.length; i++) {
+      expect(
+        doses[i].scheduledAt.difference(doses[i - 1].scheduledAt),
+        const Duration(hours: 1),
+      );
+    }
   });
 
   test('specific days only fires on selected weekdays', () {
@@ -114,7 +153,10 @@ void main() {
       until: DateTime.utc(2026, 6, 8),
       location: utc,
     );
-    expect(doses.every((d) => d.scheduledAt.weekday == DateTime.wednesday), isTrue);
+    expect(
+      doses.every((d) => d.scheduledAt.weekday == DateTime.wednesday),
+      isTrue,
+    );
   });
 
   test('monthly clamps to last day of shorter months', () {
@@ -130,7 +172,10 @@ void main() {
       until: DateTime.utc(2026, 3, 1),
       location: utc,
     );
-    expect(feb.where((d) => d.scheduledAt.month == 2).first.scheduledAt.day, 28);
+    expect(
+      feb.where((d) => d.scheduledAt.month == 2).first.scheduledAt.day,
+      28,
+    );
   });
 
   test('end date stops generation', () {

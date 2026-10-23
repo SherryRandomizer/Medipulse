@@ -392,6 +392,28 @@ CREATE TABLE health_events (
     });
   }
 
+  /// Inserts only doses whose `(medication_id, scheduled_at)` is not already
+  /// stored, regardless of the existing row's status. Existing rows are never
+  /// deleted or modified. Returns the doses that were actually inserted, in
+  /// input order.
+  Future<List<MedicationDose>> insertMissingDoses(List<MedicationDose> doses) async {
+    final db = await database;
+    final inserted = <MedicationDose>[];
+    await db.transaction((txn) async {
+      for (final dose in doses) {
+        // `ignore` turns a unique-constraint conflict into a no-op. sqflite
+        // returns 0 for an ignored insert and the new rowid otherwise.
+        final rowId = await txn.insert(
+          'medication_doses',
+          _doseMap(dose),
+          conflictAlgorithm: ConflictAlgorithm.ignore,
+        );
+        if (rowId != 0) inserted.add(dose);
+      }
+    });
+    return inserted;
+  }
+
   Future<void> upsertDose(MedicationDose dose) async {
     final db = await database;
     await db.insert(

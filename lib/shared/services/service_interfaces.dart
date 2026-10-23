@@ -89,6 +89,11 @@ abstract class MedicationRepository {
 
 abstract class DoseRepository {
   Future<void> replacePending(String medicationId, List<MedicationDose> doses);
+
+  /// Additive insert: stores only doses whose `(medicationId, scheduledAt)` is
+  /// not already present (any status) and never deletes or edits existing
+  /// rows. Returns the doses that were actually inserted.
+  Future<List<MedicationDose>> insertMissing(List<MedicationDose> doses);
   Future<void> save(MedicationDose dose);
   Future<MedicationDose?> getById(String id);
   Future<List<MedicationDose>> forUser(
