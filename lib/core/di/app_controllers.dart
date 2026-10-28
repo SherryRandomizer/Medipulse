@@ -83,7 +83,7 @@ final medicationsListProvider =
   return MedicationSearch.apply(
     all,
     query: filter.query,
-    includeArchivedWhenEmpty: filter.includeArchived,
+    includeArchived: filter.includeArchived,
   );
 });
 

@@ -177,6 +177,7 @@ class MedicationDetailScreen extends ConsumerWidget {
   ) async {
     final updated = med.copyWith(status: status);
     await ref.read(medicationCoordinatorProvider).saveMedication(updated);
+    ref.invalidate(medicationsListProvider);
     ref.invalidate(homeSnapshotProvider);
     if (context.mounted) Navigator.pop(context);
   }

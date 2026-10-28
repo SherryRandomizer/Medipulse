@@ -35,16 +35,22 @@ void main() {
     _med('OldRx', status: MedicationStatus.archived, doctor: 'Dr Lee'),
   ];
 
-  test('empty query hides archived unless requested', () {
+  test('medication search handles all archived visibility combinations', () {
     expect(MedicationSearch.apply(meds, query: '').map((m) => m.name), ['Metformin']);
     expect(
-      MedicationSearch.apply(meds, query: '', includeArchivedWhenEmpty: true).map((m) => m.name),
+      MedicationSearch.apply(meds, query: '', includeArchived: true).map((m) => m.name),
       ['Metformin', 'OldRx'],
     );
-  });
-
-  test('query matches name generic or doctor including archived', () {
+    expect(MedicationSearch.apply(meds, query: 'oldrx').map((m) => m.name), isEmpty);
+    expect(
+      MedicationSearch.apply(meds, query: 'oldrx', includeArchived: true).map((m) => m.name),
+      ['OldRx'],
+    );
+    expect(MedicationSearch.apply(meds, query: 'lee').map((m) => m.name), ['Metformin']);
+    expect(
+      MedicationSearch.apply(meds, query: 'lee', includeArchived: true).map((m) => m.name),
+      ['Metformin', 'OldRx'],
+    );
     expect(MedicationSearch.apply(meds, query: 'metformin').single.name, 'Metformin');
-    expect(MedicationSearch.apply(meds, query: 'lee').map((m) => m.name), ['Metformin', 'OldRx']);
   });
 }
