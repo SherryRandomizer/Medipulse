@@ -16,10 +16,22 @@ class MedicationsScreen extends ConsumerStatefulWidget {
 
 class _MedicationsScreenState extends ConsumerState<MedicationsScreen> {
   final _query = TextEditingController();
+  final _searchFocusNode = FocusNode();
   bool _includeArchived = false;
 
   @override
+  void initState() {
+    super.initState();
+    _searchFocusNode.addListener(_handleSearchFocusChange);
+  }
+
+  void _handleSearchFocusChange() => setState(() {});
+
+  @override
   void dispose() {
+    _searchFocusNode
+      ..removeListener(_handleSearchFocusChange)
+      ..dispose();
     _query.dispose();
     super.dispose();
   }
@@ -30,28 +42,37 @@ class _MedicationsScreenState extends ConsumerState<MedicationsScreen> {
   @override
   Widget build(BuildContext context) {
     final meds = ref.watch(medicationsListProvider(_filter));
+    // Focus is reliable even on Android configurations where the IME inset
+    // is not propagated to this route. The inset also covers a visible IME
+    // when focus has moved to another control.
+    final compactLayout = _searchFocusNode.hasFocus ||
+        MediaQuery.viewInsetsOf(context).bottom > 0;
     return Scaffold(
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const AppHeader(
+            AppHeader(
               title: 'Medications',
-              subtitle: 'Search by name, generic name, or doctor. Archived medicines appear when you search or turn on the switch.',
+              subtitle: compactLayout
+                  ? null
+                  : 'Search by name, generic name, or doctor. Archived medicines appear when you search or turn on the switch.',
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: AppTextField(
                 label: 'Search',
                 controller: _query,
+                focusNode: _searchFocusNode,
                 onChanged: (_) => setState(() {}),
               ),
             ),
-            SwitchListTile(
-              title: const Text('Include archived'),
-              value: _includeArchived,
-              onChanged: (value) => setState(() => _includeArchived = value),
-            ),
+            if (!compactLayout)
+              SwitchListTile(
+                title: const Text('Include archived'),
+                value: _includeArchived,
+                onChanged: (value) => setState(() => _includeArchived = value),
+              ),
             Expanded(
               child: meds.when(
                 loading: () => const LoadingState(),

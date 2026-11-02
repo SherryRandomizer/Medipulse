@@ -38,6 +38,7 @@ class AppTextField extends StatelessWidget {
     super.key,
     required this.label,
     this.controller,
+    this.focusNode,
     this.hint,
     this.keyboardType,
     this.obscureText = false,
@@ -49,6 +50,7 @@ class AppTextField extends StatelessWidget {
 
   final String label;
   final TextEditingController? controller;
+  final FocusNode? focusNode;
   final String? hint;
   final TextInputType? keyboardType;
   final bool obscureText;
@@ -61,6 +63,7 @@ class AppTextField extends StatelessWidget {
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
+      focusNode: focusNode,
       keyboardType: keyboardType,
       obscureText: obscureText,
       textInputAction: textInputAction,
